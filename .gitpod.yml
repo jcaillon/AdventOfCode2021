@@ -1,0 +1,64 @@
+# https://www.gitpod.io/docs/references/gitpod-yml
+github:
+  prebuilds:
+    # enable for the default branch (defaults to true)
+    master: true
+    # enable for all branches in this repo (defaults to false)
+    branches: false
+    # enable for pull requests coming from this repo (defaults to true)
+    pullRequests: false
+    # enable for pull requests coming from forks (defaults to false)
+    pullRequestsFromForks: false
+    # add a check to pull requests (defaults to true)
+    addCheck: false
+    # add a "Review in Gitpod" button as a comment to pull requests (defaults to false)
+    addComment: false
+    # add a "Review in Gitpod" button to the pull request's description (defaults to false)
+    addBadge: false
+
+# https://www.gitpod.io/docs/config-docker
+# https://hub.docker.com/u/gitpod/
+image:
+  file: .gitpod.Dockerfile
+
+# Each array element opens in its own terminal.
+# before: runs every time and needs to end
+# init: runs during prebuild only and needs to end
+# command: runs last on every start and does not need to end
+# env: env variable available in the workspace
+# openMode: tab-after, tab-before, split-right, split-left
+# https://www.gitpod.io/docs/command-line-interface
+# gp await-port 3000 && gp preview $(gp url 3000)/my/path/index.html
+# gp open <filename>
+# gp env API_ENDPOINT=https://api.example.com
+tasks:
+  - name: Restore & Build
+    init: |
+      dotnet restore
+      dotnet build
+    command: |
+      gp open Program.cs
+      dotnet run
+    openMode: tab-after
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+  # - before: sh ./scripts/setup.sh
+  #   init: npm install
+  #   command: npm run dev
+  # - name: Database
+  #   init: sh ./scripts/seed-database.sh
+  #   command: npm start-db
+  #   env:
+  #     DB_HOST: localhost:3306
+  #     DB_USER: readOnlyUser
+
+# onOpen: open-browser, open-preview, notify, ignore
+# ports:
+#   - port: 3000
+#     onOpen: open-preview
+#     visibility: private
+
+vscode:
+  extensions:
+    - muhammad-sammy.csharp
