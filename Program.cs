@@ -9,14 +9,47 @@ namespace AdventOfCode
     class Program
     {
         static void Main(string[] args) {
-            var depths = File.ReadAllLines("input").Select(s => int.Parse(s)).ToList();
-            const int slidingWindow = 3;
-            var depthSliding = depths
-                .Select((depth, index) => depths.Skip(index).Take(slidingWindow).Sum())
-                .SkipLast(slidingWindow - 1)
-                .ToArray();
-            var depthDifference = depthSliding.Select((depth, index) => index > 0 ? depth - depthSliding[index - 1] : 0);
-            Console.WriteLine(depthDifference.Count(diff => diff > 0));
+            var subMarine = new SubMarine();
+            subMarine.Move(File.ReadAllLines("input").Select(s => new MovementInstruction(s)));
+            Console.WriteLine(subMarine.Distance * subMarine.Depth);
+            Console.ReadKey();
         }
+    }
+
+    class SubMarine {
+        public int Depth { get; set; } = 0;
+        public int Distance { get; set; } = 0;
+
+        public void Move(IEnumerable<MovementInstruction> instructions) {
+            foreach (var instruction in instructions) {
+                switch (instruction.Order) {
+                    case OrderType.Forward:
+                        Distance += instruction.Value;
+                        break;
+                    case OrderType.Up:
+                        Depth -= instruction.Value;
+                        break;
+                    case OrderType.Down:
+                        Depth += instruction.Value;
+                        break;
+                }
+            }
+        }
+    }
+
+    class MovementInstruction {
+        public OrderType Order { get; set; }
+        public int Value { get; set; }
+        public MovementInstruction(string instruction) {
+            var splittedInstruction = instruction.Split(' ');
+            Order = (OrderType) Enum.Parse(typeof(OrderType), splittedInstruction[0], true);
+            Value = int.Parse(splittedInstruction[1]);
+        }
+    }
+
+    enum OrderType {
+        Forward,
+        Down,
+        Up
     }
 }
