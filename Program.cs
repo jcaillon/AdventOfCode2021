@@ -19,18 +19,20 @@ namespace AdventOfCode
     class SubMarine {
         public int Depth { get; set; } = 0;
         public int Distance { get; set; } = 0;
+        public int Aim { get; set; } = 0;
 
         public void Move(IEnumerable<MovementInstruction> instructions) {
             foreach (var instruction in instructions) {
                 switch (instruction.Order) {
                     case OrderType.Forward:
                         Distance += instruction.Value;
+                        Depth += Aim * instruction.Value;
                         break;
                     case OrderType.Up:
-                        Depth -= instruction.Value;
+                        Aim -= instruction.Value;
                         break;
                     case OrderType.Down:
-                        Depth += instruction.Value;
+                        Aim += instruction.Value;
                         break;
                 }
             }
