@@ -1,44 +1,26 @@
+using System.Numerics;
 
-var subMarine = new SubMarine();
-subMarine.Move(File.ReadAllLines("input").Select(s => new MovementInstruction(s)));
-Console.WriteLine(subMarine.Distance * subMarine.Depth);
+var input = File.ReadAllLines("input");
+var bitNumber = input[0].Length;
+var maxValue = (uint) Convert.ToUInt32(new string('1', bitNumber), 2);
+var gammaRate = Compute.ComputeRate(input.Select(s => Convert.ToUInt32(s, 2)).ToArray(), bitNumber);
+var epsilonRate = gammaRate ^ maxValue;
+Console.WriteLine(gammaRate * epsilonRate);
 
-class SubMarine {
-    public int Depth { get; set; } = 0;
-    public int Distance { get; set; } = 0;
-    public int Aim { get; set; } = 0;
+static class Compute {
 
-    public void Move(IEnumerable<MovementInstruction> instructions) {
-        foreach (var instruction in instructions) {
-            switch (instruction.Order) {
-                case OrderType.Forward:
-                    Distance += instruction.Value;
-                    Depth += Aim * instruction.Value;
-                    break;
-                case OrderType.Up:
-                    Aim -= instruction.Value;
-                    break;
-                case OrderType.Down:
-                    Aim += instruction.Value;
-                    break;
-            }
+    public static uint ComputeRate(uint[] input, int bitNumber) {
+        uint finalNumber = 0;
+        for (int i = 0; i < bitNumber; i++) {
+            var mask = (uint) BigInteger.Pow(2, i);
+            finalNumber += MostCommonBitForMask(input, mask) ? mask : 0;
         }
+        return (uint) finalNumber;
     }
-}
-
-class MovementInstruction {
-    public OrderType Order { get; set; }
-    public int Value { get; set; }
-    public MovementInstruction(string instruction) {
-        var splittedInstruction = instruction.Split(' ');
-        Order = (OrderType) Enum.Parse(typeof(OrderType), splittedInstruction[0], true);
-        Value = int.Parse(splittedInstruction[1]);
+    public static bool MostCommonBitForMask(uint[] input, uint mask) {
+        var bitSetOccurrence = input.Select(n => n & mask).Count(n => n > 0);
+        var bitUnsetOccurence = input.Length - bitSetOccurrence;
+        return bitSetOccurrence > bitUnsetOccurence;
     }
-}
 
-enum OrderType {
-    Forward,
-    Down,
-    Up
 }
-
