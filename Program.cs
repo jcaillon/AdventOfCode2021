@@ -1,52 +1,112 @@
 var input = File.ReadAllLines("input");
-var numberInput = input.Select(s => Convert.ToUInt32(s, 2)).ToArray();
-var bitNumber = input[0].Length;
+var randomDraws = input[0].Split(',').Select(s => int.Parse(s)).ToArray();
 
-var maxValue = (uint) Convert.ToUInt32(new string('1', bitNumber), 2);
-var gammaRate = Compute.ComputeRate(numberInput, bitNumber);
-var epsilonRate = gammaRate ^ maxValue;
-Console.WriteLine($"power consumption = {gammaRate * epsilonRate}");
+var boards = Board.CreateBoards(input.Skip(2).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray());
 
-var oxygenRating = Compute.ComputeRateByFiltering(numberInput, bitNumber, false);
-var scrubberRating = Compute.ComputeRateByFiltering(numberInput, bitNumber, true);
+var bingoGame = new Bingo(randomDraws, boards);
+bingoGame.Play();
 
-Console.WriteLine(Convert.ToString(oxygenRating, toBase: 2));
-Console.WriteLine(Convert.ToString(scrubberRating, toBase: 2));
+Console.WriteLine($"Number of winner = {bingoGame.WinnerBoards?.Count}, Board number = {bingoGame.WinnerBoards?[0].BoardNumber}, final score = {bingoGame.WinnerBoards?[0].FinalScore()}");
 
-Console.WriteLine($"life support rating = {oxygenRating * scrubberRating}");
+class Board {
 
-static class Compute {
+    public List<int> Grid { get; }
+    public List<bool> DrawnGrid { get; }
 
-    public static uint ComputeRateByFiltering(uint[] input, int bitNumber, bool invertBitCriteria) {
-        var dataMatchingCriteria = input.ToArray();
-        for (int i = bitNumber - 1; i >= 0; i--) {
-            var mask = (uint) 0b_1 << i;
-            var mostCommonBitForMask = MostCommonBitForMask(dataMatchingCriteria, mask);
-            var bitCriteria = mostCommonBitForMask ^ invertBitCriteria;
-            dataMatchingCriteria = dataMatchingCriteria.Where(n => bitCriteria ? (n & mask) > 0 : (n & mask) == 0).ToArray();
-            if (dataMatchingCriteria.Length <= 1) {
-                if (dataMatchingCriteria.Length == 0) {
-                    break;
-                }
-                return dataMatchingCriteria.First();
+    public int GridSize { get; }
+
+    public int BoardNumber { get; }
+
+    public bool HasWon { get; private set; }
+
+    public List<int> DrawnNumbersHistory { get; private set; } = new List<int>();
+
+    private Board(List<int> grid, int boardNumber, int gridSize) {
+        Grid = grid;
+        BoardNumber = boardNumber;
+        GridSize = gridSize;
+        DrawnGrid = Enumerable.Repeat(false, gridSize * gridSize).ToList();
+    }
+
+    public void ParticipateInBingo(Bingo bingo) {
+        bingo.NewRandomNumberIsDrawn += HandleNewRandomNumberDrawn;
+    }
+
+    private void HandleNewRandomNumberDrawn(object? sender, int number) {
+        DrawnNumbersHistory.Add(number);
+        var index = Grid.FindIndex(n => n == number);
+        if (index >= 0) {
+            DrawnGrid[index] = true;
+        }
+        CheckHasWon();
+    }
+
+    private void CheckHasWon() {
+        for (int i = 0; i < GridSize; i++) {
+            if (DrawnGrid.Skip(GridSize * i).Take(GridSize).All(b => b) || DrawnGrid.Where((n, index) => index % GridSize == i).All(b => b)) {
+                HasWon = true;
+                break;
             }
         }
-        throw new Exception("Did not match a unique number.");
     }
 
-    public static uint ComputeRate(uint[] input, int bitNumber) {
-        uint finalNumber = 0;
-        for (int i = 0; i < bitNumber; i++) {
-            var mask = (uint) 0b_1 << i;
-            finalNumber += MostCommonBitForMask(input, mask) ? mask : 0;
+    public int Score() {
+        return Grid.Where((number, index) => !DrawnGrid[index]).Sum();
+    }
+
+    public int FinalScore() {
+        return DrawnNumbersHistory.Last() * Score();
+    }
+
+    // Create boards from our input format
+    public static List<Board> CreateBoards(string[] input) {
+        var boardsInput = input;
+        var gridSize = boardsInput[0].Split(' ').Where(s => !string.IsNullOrEmpty(s)).Select(s => int.Parse(s)).Count();
+
+        if (input.Length % gridSize != 0) {
+            throw new ArgumentException("Bad input, grid size should be constant for all boards and all boards should be completly defined");
         }
-        return (uint) finalNumber;
+
+        var output = new List<Board>();
+        while (boardsInput.Length != 0) {
+            var grid = string.Join(' ', boardsInput.Take(gridSize)).Split(' ').Where(s => !string.IsNullOrEmpty(s)).Select(s => int.Parse(s)).ToList();
+
+            if (grid.Count != gridSize * gridSize) {
+                throw new ArgumentException($"Bad input, grid size for board {output.Count} should be {gridSize} x {gridSize} and it is {grid.Count}");
+            }
+
+            output.Add(new Board(grid, output.Count, gridSize));
+            boardsInput = boardsInput.Skip(gridSize).ToArray();
+        }
+        return output;
+    }
+}
+
+class Bingo {
+
+    public int[] RandomDraws { get; }
+
+    public List<Board> Boards { get; }
+
+    public List<Board>? WinnerBoards { get; private set; }
+
+    public event EventHandler<int>? NewRandomNumberIsDrawn;
+
+    public Bingo(int[] randomDraws, List<Board> boards) {
+        RandomDraws = randomDraws;
+        Boards = boards;
+        foreach (var board in Boards) {
+            board.ParticipateInBingo(this);
+        }
     }
 
-    public static bool MostCommonBitForMask(uint[] input, uint mask) {
-        var bitSetOccurrence = input.Select(n => n & mask).Count(n => n > 0);
-        var bitUnsetOccurence = input.Length - bitSetOccurrence;
-        return bitSetOccurrence >= bitUnsetOccurence;
+    public void Play() {
+        foreach (var draw in RandomDraws) {
+            NewRandomNumberIsDrawn?.Invoke(this, draw);
+            WinnerBoards = Boards.Where(b => b.HasWon).ToList();
+            if (WinnerBoards.Count > 0) {
+                break;
+            }
+        }
     }
-
 }
