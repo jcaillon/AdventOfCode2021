@@ -6,7 +6,7 @@ var boards = Board.CreateBoards(input.Skip(2).Where(s => !string.IsNullOrWhiteSp
 var bingoGame = new Bingo(randomDraws, boards);
 bingoGame.Play();
 
-Console.WriteLine($"Number of winner = {bingoGame.WinnerBoards?.Count}, Board number = {bingoGame.WinnerBoards?[0].BoardNumber}, final score = {bingoGame.WinnerBoards?[0].FinalScore()}");
+Console.WriteLine($"Number of winner = {bingoGame.WinnerBoards.Count}, Last board number = {bingoGame.WinnerBoards.Last().BoardNumber}, Last board final score = {bingoGame.WinnerBoards.Last().FinalScore()}");
 
 class Board {
 
@@ -19,6 +19,8 @@ class Board {
 
     public bool HasWon { get; private set; }
 
+    public Bingo Bingo { get; private set; }
+
     public List<int> DrawnNumbersHistory { get; private set; } = new List<int>();
 
     private Board(List<int> grid, int boardNumber, int gridSize) {
@@ -29,7 +31,8 @@ class Board {
     }
 
     public void ParticipateInBingo(Bingo bingo) {
-        bingo.NewRandomNumberIsDrawn += HandleNewRandomNumberDrawn;
+        Bingo = bingo;
+        Bingo.NewRandomNumberIsDrawn += HandleNewRandomNumberDrawn;
     }
 
     private void HandleNewRandomNumberDrawn(object? sender, int number) {
@@ -38,16 +41,18 @@ class Board {
         if (index >= 0) {
             DrawnGrid[index] = true;
         }
-        CheckHasWon();
+        if (CheckHasWon())
+            Bingo.NewRandomNumberIsDrawn -= HandleNewRandomNumberDrawn;
     }
 
-    private void CheckHasWon() {
+    private bool CheckHasWon() {
         for (int i = 0; i < GridSize; i++) {
             if (DrawnGrid.Skip(GridSize * i).Take(GridSize).All(b => b) || DrawnGrid.Where((n, index) => index % GridSize == i).All(b => b)) {
                 HasWon = true;
                 break;
             }
         }
+        return HasWon;
     }
 
     public int Score() {
@@ -80,6 +85,8 @@ class Board {
         }
         return output;
     }
+
+
 }
 
 class Bingo {
@@ -88,7 +95,7 @@ class Bingo {
 
     public List<Board> Boards { get; }
 
-    public List<Board>? WinnerBoards { get; private set; }
+    public List<Board> WinnerBoards { get; private set; } = new List<Board>();
 
     public event EventHandler<int>? NewRandomNumberIsDrawn;
 
@@ -103,10 +110,8 @@ class Bingo {
     public void Play() {
         foreach (var draw in RandomDraws) {
             NewRandomNumberIsDrawn?.Invoke(this, draw);
-            WinnerBoards = Boards.Where(b => b.HasWon).ToList();
-            if (WinnerBoards.Count > 0) {
-                break;
-            }
+            WinnerBoards.AddRange(Boards.Where(b => b.HasWon).Where(b => WinnerBoards?.All(wb => wb.BoardNumber != b.BoardNumber) ?? true));
         }
     }
+
 }
