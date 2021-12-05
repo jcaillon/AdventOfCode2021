@@ -1,117 +1,67 @@
+using System.Drawing;
+
 var input = File.ReadAllLines("input");
-var randomDraws = input[0].Split(',').Select(s => int.Parse(s)).ToArray();
 
-var boards = Board.CreateBoards(input.Skip(2).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray());
+var hydroVents = input.Select(s => {
+    var points = s.Split(" -> ").Select(s => s.Split(',').Select(s => int.Parse(s)).ToArray()).ToArray();
+    return new HydroVent(new Point(points[0][0], points[0][1]), new Point(points[1][0], points[1][1]));
+}).ToList();
 
-var bingoGame = new Bingo(randomDraws, boards);
-bingoGame.Play();
+hydroVents = hydroVents.Where(h => h.Start.X == h.End.X || h.Start.Y == h.End.Y).ToList();
 
-Console.WriteLine($"Number of winner = {bingoGame.WinnerBoards.Count}, Last board number = {bingoGame.WinnerBoards.Last().BoardNumber}, Last board final score = {bingoGame.WinnerBoards.Last().FinalScore()}");
+var oceanFloor = OceanFloor.Create(hydroVents);
 
-class Board {
-
-    public List<int> Grid { get; }
-    public List<bool> DrawnGrid { get; }
-
-    public int GridSize { get; }
-
-    public int BoardNumber { get; }
-
-    public bool HasWon { get; private set; }
-
-    public Bingo Bingo { get; private set; }
-
-    public List<int> DrawnNumbersHistory { get; private set; } = new List<int>();
-
-    private Board(List<int> grid, int boardNumber, int gridSize) {
-        Grid = grid;
-        BoardNumber = boardNumber;
-        GridSize = gridSize;
-        DrawnGrid = Enumerable.Repeat(false, gridSize * gridSize).ToList();
+// Draw small maps
+if (oceanFloor.FloorSize.Width < 20)
+    for (int i = 0; i < oceanFloor.FloorSize.Height; i++) {
+        Console.WriteLine(string.Join(' ', oceanFloor.DangerMap.Skip(i * oceanFloor.FloorSize.Width).Take(oceanFloor.FloorSize.Width)));
     }
 
-    public void ParticipateInBingo(Bingo bingo) {
-        Bingo = bingo;
-        Bingo.NewRandomNumberIsDrawn += HandleNewRandomNumberDrawn;
+Console.WriteLine($"Number point with 2 overlapping lines = {oceanFloor.DangerMap.Count(d => d >= 2)}");
+
+class OceanFloor {
+    public List<int> DangerMap { get; private set; }
+
+    public List<HydroVent> HydroVents { get; private set; }
+
+    public Size FloorSize { get; private set; }
+
+    OceanFloor(List<HydroVent> hydroVents, Size? floorSize = null) {
+        HydroVents = hydroVents;
+        FloorSize = floorSize ?? new Size(
+            HydroVents.Select(h => Math.Max(h.Start.X, h.End.X)).Max() + 1,
+            HydroVents.Select(h => Math.Max(h.Start.Y, h.End.Y)).Max() + 1
+        );
+        DangerMap = Enumerable.Repeat(0, FloorSize.Width * FloorSize.Height).ToList();
     }
 
-    private void HandleNewRandomNumberDrawn(object? sender, int number) {
-        DrawnNumbersHistory.Add(number);
-        var index = Grid.FindIndex(n => n == number);
-        if (index >= 0) {
-            DrawnGrid[index] = true;
-        }
-        if (CheckHasWon())
-            Bingo.NewRandomNumberIsDrawn -= HandleNewRandomNumberDrawn;
+    public static OceanFloor Create(List<HydroVent> hydroVents, Size? floorSize = null) {
+        var oceanFloor = new OceanFloor(hydroVents, floorSize);
+        oceanFloor.ComputeDangerMap();
+        return oceanFloor;
     }
 
-    private bool CheckHasWon() {
-        for (int i = 0; i < GridSize; i++) {
-            if (DrawnGrid.Skip(GridSize * i).Take(GridSize).All(b => b) || DrawnGrid.Where((n, index) => index % GridSize == i).All(b => b)) {
-                HasWon = true;
-                break;
+    private void ComputeDangerMap() {
+        foreach (var hydroVent in HydroVents) {
+            var xLength = hydroVent.End.X - hydroVent.Start.X;
+            var yLength = hydroVent.End.Y - hydroVent.Start.Y;
+            for (int i = 0; i <= Math.Max(Math.Abs(xLength), Math.Abs(yLength)); i++) {
+                var xIncrement = xLength == 0 ? 0 : Math.Sign(xLength) * i;
+                var yIncrement = yLength == 0 ? 0 : Math.Sign(yLength) * i;
+                var index = hydroVent.Start.X + xIncrement + (hydroVent.Start.Y + yIncrement) * FloorSize.Width;
+                DangerMap[index]++;
             }
         }
-        return HasWon;
     }
-
-    public int Score() {
-        return Grid.Where((number, index) => !DrawnGrid[index]).Sum();
-    }
-
-    public int FinalScore() {
-        return DrawnNumbersHistory.Last() * Score();
-    }
-
-    // Create boards from our input format
-    public static List<Board> CreateBoards(string[] input) {
-        var boardsInput = input;
-        var gridSize = boardsInput[0].Split(' ').Where(s => !string.IsNullOrEmpty(s)).Select(s => int.Parse(s)).Count();
-
-        if (input.Length % gridSize != 0) {
-            throw new ArgumentException("Bad input, grid size should be constant for all boards and all boards should be completly defined");
-        }
-
-        var output = new List<Board>();
-        while (boardsInput.Length != 0) {
-            var grid = string.Join(' ', boardsInput.Take(gridSize)).Split(' ').Where(s => !string.IsNullOrEmpty(s)).Select(s => int.Parse(s)).ToList();
-
-            if (grid.Count != gridSize * gridSize) {
-                throw new ArgumentException($"Bad input, grid size for board {output.Count} should be {gridSize} x {gridSize} and it is {grid.Count}");
-            }
-
-            output.Add(new Board(grid, output.Count, gridSize));
-            boardsInput = boardsInput.Skip(gridSize).ToArray();
-        }
-        return output;
-    }
-
-
 }
 
-class Bingo {
+class HydroVent {
+    public Point Start { get; set; }
 
-    public int[] RandomDraws { get; }
+    public Point End { get; set; }
 
-    public List<Board> Boards { get; }
-
-    public List<Board> WinnerBoards { get; private set; } = new List<Board>();
-
-    public event EventHandler<int>? NewRandomNumberIsDrawn;
-
-    public Bingo(int[] randomDraws, List<Board> boards) {
-        RandomDraws = randomDraws;
-        Boards = boards;
-        foreach (var board in Boards) {
-            board.ParticipateInBingo(this);
-        }
+    public HydroVent(Point start, Point end) {
+        Start = start;
+        End = end;
     }
-
-    public void Play() {
-        foreach (var draw in RandomDraws) {
-            NewRandomNumberIsDrawn?.Invoke(this, draw);
-            WinnerBoards.AddRange(Boards.Where(b => b.HasWon).Where(b => WinnerBoards?.All(wb => wb.BoardNumber != b.BoardNumber) ?? true));
-        }
-    }
-
 }
