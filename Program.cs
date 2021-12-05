@@ -7,7 +7,8 @@ var hydroVents = input.Select(s => {
     return new HydroVent(new Point(points[0][0], points[0][1]), new Point(points[1][0], points[1][1]));
 }).ToList();
 
-hydroVents = hydroVents.Where(h => h.Start.X == h.End.X || h.Start.Y == h.End.Y).ToList();
+// Part1:
+//hydroVents = hydroVents.Where(h => h.Start.X == h.End.X || h.Start.Y == h.End.Y).ToList();
 
 var oceanFloor = OceanFloor.Create(hydroVents);
 
