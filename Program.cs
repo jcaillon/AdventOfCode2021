@@ -1,68 +1,101 @@
-using System.Drawing;
+using NUnit.Framework;
 
-var input = File.ReadAllLines("input");
+Console.WriteLine(Puzzle.Solve("input-test", 18));
+Console.WriteLine(Puzzle.Solve("input-test", 80));
+Console.WriteLine(Puzzle.Solve("input", 80));
 
-var hydroVents = input.Select(s => {
-    var points = s.Split(" -> ").Select(s => s.Split(',').Select(s => int.Parse(s)).ToArray()).ToArray();
-    return new HydroVent(new Point(points[0][0], points[0][1]), new Point(points[1][0], points[1][1]));
-}).ToList();
-
-// Part1:
-//hydroVents = hydroVents.Where(h => h.Start.X == h.End.X || h.Start.Y == h.End.Y).ToList();
-
-var oceanFloor = OceanFloor.Create(hydroVents);
-
-// Draw small maps
-if (oceanFloor.FloorSize.Width < 20)
-    for (int i = 0; i < oceanFloor.FloorSize.Height; i++) {
-        Console.WriteLine(string.Join(' ', oceanFloor.DangerMap.Skip(i * oceanFloor.FloorSize.Width).Take(oceanFloor.FloorSize.Width)));
+static class Puzzle {
+    public static string Solve(string inputFilePath, int nbDays) {
+        var lanternFishAgeList = File.ReadAllText(inputFilePath).TrimEnd().Split(',').Select(s => int.Parse(s)).ToList();
+        var ocean = new Ocean(lanternFishAgeList);
+        ocean.FastFoward(nbDays);
+        return $"After {nbDays} days there are {ocean.Fishes.Count} lantern fishes in the ocean.";
     }
 
-Console.WriteLine($"Number point with 2 overlapping lines = {oceanFloor.DangerMap.Count(d => d >= 2)}");
+}
 
-class OceanFloor {
-    public List<int> DangerMap { get; private set; }
+class Ocean {
+    public List<LanternFish> ParentFishes { get; private set; }
 
-    public List<HydroVent> HydroVents { get; private set; }
-
-    public Size FloorSize { get; private set; }
-
-    OceanFloor(List<HydroVent> hydroVents, Size? floorSize = null) {
-        HydroVents = hydroVents;
-        FloorSize = floorSize ?? new Size(
-            HydroVents.Select(h => Math.Max(h.Start.X, h.End.X)).Max() + 1,
-            HydroVents.Select(h => Math.Max(h.Start.Y, h.End.Y)).Max() + 1
-        );
-        DangerMap = Enumerable.Repeat(0, FloorSize.Width * FloorSize.Height).ToList();
-    }
-
-    public static OceanFloor Create(List<HydroVent> hydroVents, Size? floorSize = null) {
-        var oceanFloor = new OceanFloor(hydroVents, floorSize);
-        oceanFloor.ComputeDangerMap();
-        return oceanFloor;
-    }
-
-    private void ComputeDangerMap() {
-        foreach (var hydroVent in HydroVents) {
-            var xLength = hydroVent.End.X - hydroVent.Start.X;
-            var yLength = hydroVent.End.Y - hydroVent.Start.Y;
-            for (int i = 0; i <= Math.Max(Math.Abs(xLength), Math.Abs(yLength)); i++) {
-                var xIncrement = xLength == 0 ? 0 : Math.Sign(xLength) * i;
-                var yIncrement = yLength == 0 ? 0 : Math.Sign(yLength) * i;
-                var index = hydroVent.Start.X + xIncrement + (hydroVent.Start.Y + yIncrement) * FloorSize.Width;
-                DangerMap[index]++;
+    public List<LanternFish> Fishes {
+        get {
+            var fishList = new List<LanternFish>();
+            var parentFishes = ParentFishes.ToList();
+            while (parentFishes.Count > 0) {
+                fishList.AddRange(parentFishes);
+                parentFishes = parentFishes.SelectMany(f => f.Children).ToList();
             }
+            return fishList;
+        }
+    }
+
+    public int DayNumber { get; private set; } = 0;
+
+    public event EventHandler<int>? NewDayHasPassed;
+
+    public Ocean(List<int> lanternFishAgeList) {
+        ParentFishes = lanternFishAgeList.Select(a => new LanternFish(this, 999, a)).ToList();
+    }
+
+    public void FastFoward(int dayCount) {
+        for (int i = 0; i < dayCount; i++) {
+            DayNumber++;
+            NewDayHasPassed?.Invoke(this, DayNumber);
+        }
+    }
+    
+}
+
+class LanternFish {
+    public int Age { get; private set; }
+    public int TimeBeforeNextChild { get; private set; } = 0;
+
+    /// <summary>
+    /// Amount of time for <see cref="LanternFish"/> to create a new child.
+    /// </summary>
+    public int GestationPeriod { get; private set; }
+
+    /// <summary>
+    /// Age at which a <see cref="LanternFish"/> can start reproducing.
+    /// </summary>
+    public int ReproductionAge { get; private set; }
+
+    public List<LanternFish> Children { get; private set; } = new List<LanternFish>();
+
+    public Ocean Home { get; private set; }
+
+    public LanternFish(Ocean home, int age, int timeBeforeNextChild, int gestationPeriod = 7, int reproductionAge = 2) {
+        Age = age;
+        GestationPeriod = gestationPeriod;
+        ReproductionAge = reproductionAge;
+        Home = home;
+        Home.NewDayHasPassed += HandleNewDay;
+        TimeBeforeNextChild = timeBeforeNextChild;
+    }
+
+    private void HandleNewDay(object? sender, int newDayNumber) {
+        Age++;
+        if (Age >= ReproductionAge) {
+            if (TimeBeforeNextChild == 0) {
+                TimeBeforeNextChild = GestationPeriod;
+                if (Age > ReproductionAge) {
+                    Children.Add(new LanternFish(Home, 0, 0, GestationPeriod, ReproductionAge));
+                }
+            }
+            TimeBeforeNextChild--;
         }
     }
 }
 
-class HydroVent {
-    public Point Start { get; set; }
+namespace Test {
 
-    public Point End { get; set; }
+    [TestFixture]
+    public class TestPuzzle {
 
-    public HydroVent(Point start, Point end) {
-        Start = start;
-        End = end;
+        [Test]
+        public void SolveIsCorrect() {
+            Assert.AreEqual(Puzzle.Solve("input-test", 18), "After 18 days there are 26 lantern fishes in the ocean.");
+            Assert.AreEqual(Puzzle.Solve("input-test", 80), "After 18 days there are 5934 lantern fishes in the ocean.");
+        }
     }
 }
