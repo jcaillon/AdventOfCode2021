@@ -2,7 +2,10 @@ using NUnit.Framework;
 
 Console.WriteLine(Puzzle.Solve("input-test", 18));
 Console.WriteLine(Puzzle.Solve("input-test", 80));
-Console.WriteLine(Puzzle.Solve("input", 80));
+Console.WriteLine(Puzzle.SolveFast("input-test", 18));
+Console.WriteLine(Puzzle.SolveFast("input-test", 80));
+Console.WriteLine(Puzzle.SolveFast("input-test", 256));
+Console.WriteLine(Puzzle.SolveFast("input", 256));
 
 static class Puzzle {
     public static string Solve(string inputFilePath, int nbDays) {
@@ -10,6 +13,28 @@ static class Puzzle {
         var ocean = new Ocean(lanternFishAgeList);
         ocean.FastFoward(nbDays);
         return $"After {nbDays} days there are {ocean.Fishes.Count} lantern fishes in the ocean.";
+    }
+
+    public static string SolveFast(string inputFilePath, int nbDays) {
+        // methode with low mem footprint, each value of spawnDayNumber represents the nb of fish that will have new children for each day of the week
+        var NbOfFishGettingNewChildrenPerDayNumber = new ulong[7];
+        for (int i = 0; i < 7; i++) {
+            NbOfFishGettingNewChildrenPerDayNumber[i] = (ulong) File.ReadAllText(inputFilePath).TrimEnd().Split(',').Select(s => int.Parse(s)).Count(d => d == i);
+        }
+        byte dayNumber = 0;
+        ulong babyFishes = 0;
+        ulong teenageFishes = 0;
+        for (int i = 0; i < nbDays; i++) {
+            dayNumber++;
+            ulong bornFishes = NbOfFishGettingNewChildrenPerDayNumber[dayNumber - 1];
+            NbOfFishGettingNewChildrenPerDayNumber[dayNumber - 1] += teenageFishes;
+            teenageFishes = babyFishes;
+            babyFishes = bornFishes;
+            if (dayNumber >= 7) {
+                dayNumber = 0;
+            }
+        }
+        return $"After {nbDays} days there are {NbOfFishGettingNewChildrenPerDayNumber.Sum(u => (decimal) u) + babyFishes + teenageFishes} lantern fishes in the ocean.";
     }
 
 }
@@ -43,7 +68,7 @@ class Ocean {
             NewDayHasPassed?.Invoke(this, DayNumber);
         }
     }
-    
+
 }
 
 class LanternFish {
@@ -96,6 +121,7 @@ namespace Test {
         public void SolveIsCorrect() {
             Assert.AreEqual(Puzzle.Solve("input-test", 18), "After 18 days there are 26 lantern fishes in the ocean.");
             Assert.AreEqual(Puzzle.Solve("input-test", 80), "After 18 days there are 5934 lantern fishes in the ocean.");
+            Assert.AreEqual(Puzzle.Solve("input-test", 256), "After 18 days there are 26984457539 lantern fishes in the ocean.");
         }
     }
 }
