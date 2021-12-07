@@ -7,9 +7,17 @@ static class Puzzle {
 
         var costForEachPosition = new List<int>();
         for (int i = crabPosition.Min(); i <= crabPosition.Max(); i++) {
-            costForEachPosition.Add(crabPosition.Select(pos => Math.Abs(pos - i)).Sum());
+            costForEachPosition.Add(crabPosition.Select(pos => Math.Abs(pos - i).CrabFuelConsumptionFromLength()).Sum());
         }
 
         return $"The minimum fuel consumption is for position {costForEachPosition.FindIndex(x => x == costForEachPosition.Min()) + crabPosition.Min()} with {costForEachPosition.Min()} fuel consumed";
+    }
+
+    public static int CrabFuelConsumptionFromLength(this int length) {
+        var cost = 0;
+        for (int i = 0; i <= length; i++) {
+            cost += i;
+        }
+        return cost;
     }
 }
