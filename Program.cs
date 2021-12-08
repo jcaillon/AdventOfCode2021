@@ -1,23 +1,40 @@
+using System.Diagnostics;
+
 Console.WriteLine(Puzzle.Solve("input-test"));
 Console.WriteLine(Puzzle.Solve("input"));
 
 static class Puzzle {
     public static string Solve(string inputFilePath) {
-        var crabPosition = File.ReadAllText(inputFilePath).TrimEnd().Split(',').Select(s => int.Parse(s)).ToArray();
+        var entryList = File.ReadAllLines(inputFilePath)
+            .Select(s => {
+                var split = s.Split('|');
+                return new Entry(split[0].Trim().Split(' '), split[1].Trim().Split(' '));
+            })
+            .ToList();
 
-        var costForEachPosition = new List<int>();
-        for (int i = crabPosition.Min(); i <= crabPosition.Max(); i++) {
-            costForEachPosition.Add(crabPosition.Select(pos => Math.Abs(pos - i).CrabFuelConsumptionFromLength()).Sum());
-        }
-
-        return $"The minimum fuel consumption is for position {costForEachPosition.FindIndex(x => x == costForEachPosition.Min()) + crabPosition.Min()} with {costForEachPosition.Min()} fuel consumed";
-    }
-
-    public static int CrabFuelConsumptionFromLength(this int length) {
-        var cost = 0;
-        for (int i = 0; i <= length; i++) {
-            cost += i;
-        }
-        return cost;
+        return $"There is a total of {entryList.SelectMany(entry => entry.OutputMixedSignals).Count(signal => signal.Length < 5 || signal.Length > 6)} 1, 4, 7 and 8";
     }
 }
+
+class Entry {
+    public List<Signal> MixedSignals { get; set; }
+
+    public List<Signal> OutputMixedSignals { get; set; }
+
+    public Entry(IEnumerable<string> mixedSignals, IEnumerable<string> output) {
+        MixedSignals = mixedSignals.Select(s => new Signal(string.Concat(s.OrderBy(c => c)))).ToList();
+        OutputMixedSignals = output.Select(s => new Signal(string.Concat(s.OrderBy(c => c)))).ToList();
+    }
+
+}
+
+
+class Signal {
+    public string Segments { get; set; }
+    public int Length => Segments.Length;
+    public Signal(string segmentsOn) {
+        Segments = segmentsOn;
+    }
+}
+
+
