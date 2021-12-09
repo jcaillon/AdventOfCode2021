@@ -15,6 +15,8 @@ dotnet run
 Each commit in this repo is a puzzle solution.
 
 - [Most recent day](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs)
+- [day8-part2](https://github.com/jcaillon/AdventOfCode2021/blob/b353833aa445030f0b3e4090856bb6434804c85d/Program.cs)
+- [day8-part1](https://github.com/jcaillon/AdventOfCode2021/blob/2b5123ee23c4fdc5e7dc1565267f9c653bd1f14e/Program.cs)
 - [day7-part2](https://github.com/jcaillon/AdventOfCode2021/blob/ed79c5efa0e3902397bc6e199aed10e8108e31dc/Program.cs)
 - [day7-part1](https://github.com/jcaillon/AdventOfCode2021/blob/d48712c17839922ef23c686a4613c152905f3b5e/Program.cs)
 - [day6-part2](https://github.com/jcaillon/AdventOfCode2021/blob/b1c247ba86077d17d4cfeb11672540de1996293a/Program.cs)
