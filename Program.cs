@@ -1,25 +1,17 @@
 using System.Diagnostics;
 
-Console.WriteLine(Puzzle.Solve("input-test", 10));
-Console.WriteLine(Puzzle.Solve("input-test", 100));
-Console.WriteLine(Puzzle.Solve("input", 100));
+Console.WriteLine(Puzzle.Solve("input-test"));
+Console.WriteLine(Puzzle.Solve("input"));
 
 static class Puzzle {
-    public static string Solve(string inputFilePath, int nbSteps) {
+    public static string Solve(string inputFilePath) {
         var inputList = File.ReadAllLines(inputFilePath);
         var cavern = new Cavern(inputList.SelectMany(c => c).Select(c => byte.Parse($"{c}")).ToList(), inputList[0].Length, inputList.Length);
-        var totalFlashes = 0;
-        for (int i = 0; i < nbSteps; i++) {
+
+        while(cavern.TotalFlashNumber != cavern.OctopusesEnergyLevel.Count) {
             cavern.NextStep();
-            totalFlashes += cavern.TotalFlashNumber;
-            if (nbSteps < 5) {
-                Console.WriteLine($"Step {cavern.Step}");
-                for (int j = 0; j < cavern.MapHeight; j++) {
-                    Console.WriteLine(String.Concat(cavern.OctopusesEnergyLevel.Skip(j * cavern.MapWidth).Take(cavern.MapWidth)));
-                }
-            }
         }
-        return $"After {nbSteps} steps, there has been a total of {totalFlashes} flashes.";
+        return $"The first step during which all octopuses flash is {cavern.Step}.";
     }
 }
 
