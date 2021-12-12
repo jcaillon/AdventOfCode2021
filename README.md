@@ -15,6 +15,7 @@ dotnet run
 Each commit in this repo is a puzzle solution.
 
 - [Most recent day](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs)
+- [day11 (Highlighted octopuses)](https://adventofcode.com/2021/day/11): [day11-part2](https://github.com/jcaillon/AdventOfCode2021/blob/e8609b1e7e4c86435869d23d3e178144c0c4d3ee/Program.cs) / [day11-part1](https://github.com/jcaillon/AdventOfCode2021/blob/62f4d21d447645fb537882067fafae8ea73a6994/Program.cs)
 - [day10 (syntax check)](https://adventofcode.com/2021/day/10): [day10-part1](https://github.com/jcaillon/AdventOfCode2021/blob/c437fdd731695ef8624a163bb050233ce7f8d19f/Program.cs) / [day10-part2](https://github.com/jcaillon/AdventOfCode2021/blob/4b4e705438943ff7272750e47d3d5bc02a3a8f07/Program.cs)
 - [day9 (find basins)](https://adventofcode.com/2021/day/9): [day9-part1](https://github.com/jcaillon/AdventOfCode2021/blob/2249b1e8d4706be550d5338d1cdb2bfb65fdb8c7/Program.cs) / [day9-part2](https://github.com/jcaillon/AdventOfCode2021/blob/a95b708224298ad2fd1db139431cfb9a8f84d112/Program.cs) 
 - [day8 (seven segment search)](https://adventofcode.com/2021/day/8): [day8-part1](https://github.com/jcaillon/AdventOfCode2021/blob/2b5123ee23c4fdc5e7dc1565267f9c653bd1f14e/Program.cs) / [day8-part2](https://github.com/jcaillon/AdventOfCode2021/blob/b353833aa445030f0b3e4090856bb6434804c85d/Program.cs)
