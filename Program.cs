@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 Console.WriteLine(Puzzle.Solve("input-test"));
 Console.WriteLine(Puzzle.Solve("input"));
 
@@ -8,7 +6,13 @@ static class Puzzle {
         var inputList = File.ReadAllLines(inputFilePath);
         var cavern = new Cavern(inputList.Select(s => new Connexion(new Cave(s.Split('-')[0]), new Cave(s.Split('-')[1]))).ToList());
 
-        return $"There are {cavern.Paths.Count} paths through this cave system that visit small caves at most once.";
+        if (cavern.Paths.Count < 50) {
+            foreach (var path in cavern.Paths) {
+                Console.WriteLine(string.Join(',', path.Caves.Select(c => c.Name)));
+            }
+        }
+
+        return $"There are {cavern.Paths.Count} paths through this cave system.";
     }
 }
 
@@ -36,28 +40,22 @@ class Cavern {
                 Cave? caveToAddToCurrentPath = null;
                 foreach (var connectedCave in connectedCaves) {
                     var caveBeforeLastCave = currentBranch.GetBeforeLastCave();
-                    //if (connectedCave == null || (caveBeforeLastCave?.Name.Equals(connectedCave.Name, StringComparison.CurrentCulture) ?? false))
-                    if (connectedCave == null)
-                        continue;
-                    if (currentCave.IsBig && (caveBeforeLastCave?.IsBig ?? false) && (caveBeforeLastCave?.Name.Equals(connectedCave.Name) ?? false)) {
+                    if (connectedCave == null || connectedCave.IsStart)
+                        continue; // do not go back to the start
+                    if (currentCave.IsBig && (caveBeforeLastCave?.IsBig ?? false) && (caveBeforeLastCave?.Name.Equals(connectedCave.Name) ?? false))
                         continue; // avoid infinite back and forth between 2 big caves.
-                    }
-                    nbConnectedCave++;
-                    if (!connectedCave.IsBig && currentBranch.Contains(connectedCave)) {
-                        // small cave already explored
-                        continue;
-                    }
+                    if (!connectedCave.IsBig && currentBranch.Contains(connectedCave) && currentBranch.HasVisitedASmallCaveTwice)
+                        continue; // small cave already explored and we already explored 1 small cavern twice
                     int indexToExplore;
-                    if (nbConnectedCave == 1) {
+                    if (++nbConnectedCave == 1) {
                         caveToAddToCurrentPath = connectedCave;
                         indexToExplore = currentBranchIndex;
                     } else {
                         indexToExplore = branches.Count;
-                        branches.Add(new Path(currentBranch.Caves.Append(connectedCave).ToList()));
+                        branches.Add(new Path(currentBranch.Caves.Append(connectedCave)));
                     }
-                    if (!connectedCave.IsEnd) {
+                    if (!connectedCave.IsEnd)
                         brancheIndexesToExplore.Enqueue(indexToExplore);
-                    }
                 }
                 if (caveToAddToCurrentPath != null)
                     currentBranch.AddCave(caveToAddToCurrentPath);
@@ -67,12 +65,24 @@ class Cavern {
     }
 }
 class Path {
-    public List<Cave> Caves { get; private set; }
-    public Path(List<Cave> caves) => Caves = caves;
+    public List<Cave> Caves { get; private set; } = new List<Cave>();
+    public Path(IEnumerable<Cave> caves) {
+        foreach (var cave in caves) {
+            AddCave(cave);
+        }
+    }
+
+    public bool HasVisitedASmallCaveTwice { get; private set; } = false;
     public bool Contains(Cave cave) {
         return Caves.Exists(c => c.Name.Equals(cave.Name, StringComparison.CurrentCulture));
     }
-    public void AddCave(Cave cave) => Caves.Add(cave);
+    public void AddCave(Cave cave) {
+        if (!cave.IsBig && Contains(cave)) {
+            HasVisitedASmallCaveTwice = true;
+        }
+        Caves.Add(cave);
+    }
+
     public Cave? GetBeforeLastCave() {
         return Caves.Count >= 2 ? Caves[Caves.Count - 2] : null;
     }
