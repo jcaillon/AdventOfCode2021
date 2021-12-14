@@ -17,7 +17,7 @@ Each commit in this repo is a puzzle solution.
 <!-- 
 - [day15 ()](https://adventofcode.com/2021/day/15): [day15-part1](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs) 
 -->
-- [day14 (Extended Polymerization)](https://adventofcode.com/2021/day/14): [day14-part1](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs)
+- [day14 (Extended Polymerization)](https://adventofcode.com/2021/day/14): [day14-part1](https://github.com/jcaillon/AdventOfCode2021/blob/d22d516433016a13144575953a060348fc3c5140/Program.cs) / [day14-part2](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs)
 - [day13 (Origami)](https://adventofcode.com/2021/day/13): [day13-part1](https://github.com/jcaillon/AdventOfCode2021/blob/0f3325b25da614f9145449e14bc06c3b6ca2295a/Program.cs) / [day13-part2](https://github.com/jcaillon/AdventOfCode2021/blob/b0e20ee82d6bdd4438da88fc28f73cbc6a858ccc/Program.cs)
 - [day12 (Find path)](https://adventofcode.com/2021/day/12): [day12-part1](https://github.com/jcaillon/AdventOfCode2021/blob/f20bf8d9ed9e33297dd0be3d61d6b1fdc45e8b1f/Program.cs) / [day12-part2](https://github.com/jcaillon/AdventOfCode2021/blob/8c94e43f731041a7c8934ea3ede31ed65cf0f8e8/Program.cs)
 - [day11 (Highlighted octopuses)](https://adventofcode.com/2021/day/11): [day11-part1](https://github.com/jcaillon/AdventOfCode2021/blob/62f4d21d447645fb537882067fafae8ea73a6994/Program.cs) / [day11-part2](https://github.com/jcaillon/AdventOfCode2021/blob/e8609b1e7e4c86435869d23d3e178144c0c4d3ee/Program.cs)
