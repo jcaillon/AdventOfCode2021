@@ -1,87 +1,69 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Text;
 
-Console.WriteLine(Puzzle.Solve("input-test", true, true));
-Console.WriteLine(Puzzle.Solve("input", true, false));
+Console.WriteLine(Puzzle.Solve("input-test", 10, true));
+Console.WriteLine(Puzzle.Solve("input", 10, false));
 
 static class Puzzle {
-    public static string Solve(string inputFilePath, bool printFinalMap, bool printIntermediateMaps) {
+    public static string Solve(string inputFilePath, int stepNumber, bool displayResult) {
         var inputList = File.ReadAllLines(inputFilePath);
-        var dotLocations = inputList.Where(s => s.Contains(',')).Select(s => new Point(int.Parse(s.Split(',')[0]), int.Parse(s.Split(',')[1]))).ToList();
-        var origami = new Origami(dotLocations, dotLocations.Select(p => p.X).Max() + 1, dotLocations.Select(p => p.Y).Max() + 1);
+        var pairInsertionsRules = inputList.Where(s => s.Contains('-')).Select(s => { var sp = s.Split(" -> "); return new InsertionRule(sp[0], sp[1]); }).ToList();
+        var polymerizationEquipement = new PolymerizationEquipement(inputList[0], pairInsertionsRules);
 
-        if (printIntermediateMaps)
-            origami.PrintToConsole();
+        if (displayResult)
+            Console.WriteLine($"Template     : {polymerizationEquipement.PolymerTemplate}");
 
-        var foldInstructions = inputList.Where(s => s.Contains('=')).Select(s => s.Split(' ')[2]).ToList();
-        foreach (var foldInstr in foldInstructions.Select(s => s.Split('='))) {
-            if (foldInstr[0] == "y") {
-                origami.FoldHorizontally(int.Parse(foldInstr[1]));
-            } else {
-                origami.FoldVertically(int.Parse(foldInstr[1]));
-            }
-            if (printIntermediateMaps)
-                origami.PrintToConsole();
+        for (int i = 0; i < stepNumber; i++) {
+            polymerizationEquipement.ExecutePolymerInsertion();
+            if (displayResult)
+                Console.WriteLine($"After step {polymerizationEquipement.Step,-2}: {polymerizationEquipement.Polymer}");
         }
 
-        if (printFinalMap && !printIntermediateMaps)
-            origami.PrintToConsole();
-
-        return $"There are {origami.DotsMap.Count(dot => dot)} dots visible.";
+        var groupedByElements = polymerizationEquipement.Polymer.ToList().GroupBy(c => c).OrderBy(g => g.Count()).ToList();
+        return $"The quantity of the most common element minus the quantity of the least common element is {groupedByElements.Last().Count() - groupedByElements.First().Count()}.";
     }
 }
 
-class Origami {
-    public List<bool> DotsMap { get; private set; }
-    public int MapWidth { get; private set; }
-    public int MapHeight { get; private set; }
+class PolymerizationEquipement {
+    public string PolymerTemplate { get; }
+    public string Polymer { get; private set; }
+    public List<InsertionRule> PairInsertionRules { get; private set; }
+    public int Step { get; private set; }
 
-    public Origami(List<Point> dotLocations, int mapWidth, int mapHeight) {
-        MapWidth = mapWidth;
-        MapHeight = mapHeight;
-        DotsMap = Enumerable.Repeat(false, mapWidth * mapHeight).ToList();
-        dotLocations.ForEach(p => DotsMap[p.X + p.Y * MapWidth] = true);
+    public PolymerizationEquipement(string polymerTemplate, List<InsertionRule> pairInsertionRules) {
+        PolymerTemplate = polymerTemplate;
+        Polymer = polymerTemplate;
+        PairInsertionRules = pairInsertionRules;
+        Step = 0;
+    }
+    public void ExecutePolymerInsertion() {
+        Step++;
+        var sb = new StringBuilder();
+        for (int i = 0; i < Polymer.Length - 1; i++) {
+            var adjacentElements = Polymer.Substring(i, 2);
+            foreach (var rule in PairInsertionRules) {
+                adjacentElements = rule.ApplyRule(adjacentElements);
+                if (adjacentElements.Length > 2)
+                    break;
+            }
+            sb.Append(adjacentElements.Substring(0, 2));
+        }
+        sb.Append(Polymer.Last());
+        Polymer = sb.ToString();
     }
 
-    public void FoldHorizontally(int line) {
-        var nbLinesToFold = MapHeight - line - 1;
-        for (int foldedLine = 1; foldedLine <= nbLinesToFold; foldedLine++) {
-            for (int i = 0; i < MapWidth; i++) {
-                var currentIndex = i + (line + foldedLine) * MapWidth;
-                var newIndex = i + (line - foldedLine) * MapWidth;
-                DotsMap[newIndex] = DotsMap[newIndex] || DotsMap[currentIndex];
-            }
-        }
-        MapHeight = line;
-        DotsMap = DotsMap.SkipLast((nbLinesToFold + 1) * MapWidth).ToList();
-        Debug.Assert(DotsMap.Count == MapWidth * MapHeight);
-    }
+}
 
-    public void FoldVertically(int column) {
-        var nbLinesToFold = MapWidth - column - 1;
-        for (int foldedColumn = 1; foldedColumn <= nbLinesToFold; foldedColumn++) {
-            for (int i = 0; i < MapHeight; i++) {
-                var currentIndex = column + foldedColumn + i * MapWidth;
-                var newIndex = column - foldedColumn + i * MapWidth;
-                DotsMap[newIndex] = DotsMap[newIndex] || DotsMap[currentIndex];
-            }
-        }
-        var currentDotsMap = DotsMap.ToList();
-        DotsMap = new List<bool>();
-        for (int i = 0; i < MapWidth * MapHeight; i++) {
-            var x = i % MapWidth;
-            if (x < column) {
-                DotsMap.Add(currentDotsMap[i]);
-            }
-        }
-        MapWidth = column;
-        Debug.Assert(DotsMap.Count == MapWidth * MapHeight);
-    }
+class InsertionRule {
+    public string AdjacentElements { get; private set; }
+    public string InsertedElement { get; private set; }
 
-    public void PrintToConsole() {
-        for (int i = 0; i < MapHeight; i++) {
-            Console.WriteLine(string.Concat(DotsMap.Skip(i * MapWidth).Take(MapWidth).Select(b => b ? '#' : '.')));
-        }
-        Console.WriteLine();
+    public InsertionRule(string adjacentElements, string insertedElement) {
+        AdjacentElements = adjacentElements;
+        InsertedElement = insertedElement;
+    }
+    public string ApplyRule(string adjacentElements) {
+        return adjacentElements.Equals(AdjacentElements) ? $"{AdjacentElements[0]}{InsertedElement}{AdjacentElements[1]}" : adjacentElements;
     }
 }
