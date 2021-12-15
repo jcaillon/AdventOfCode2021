@@ -2,91 +2,74 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Text;
 
-Console.WriteLine(Puzzle.Solve("input-test", 40));
-Console.WriteLine(Puzzle.Solve("input", 40));
+Console.WriteLine(Puzzle.Solve("input-test"));
+Console.WriteLine(Puzzle.Solve("input"));
 
 static class Puzzle {
-    public static string Solve(string inputFilePath, int stepNumber) {
+    public static string Solve(string inputFilePath) {
         var inputList = File.ReadAllLines(inputFilePath);
-        var pairInsertionsRules = inputList.Where(s => s.Contains('-')).Select(s => { var sp = s.Split(" -> "); return new InsertionRule(sp[0], sp[1]); }).ToList();
-        var polymerizationEquipement = new PolymerizationEquipement(inputList[0], pairInsertionsRules);
+        var cavern = new Cavern(inputList.SelectMany(c => c).Select(c => byte.Parse($"{c}")).ToList(), inputList[0].Length, inputList.Length);
 
-        for (int i = 0; i < stepNumber; i++) {
-            polymerizationEquipement.ExecutePolymerInsertion();
-        }
-
-        var countByElementSorted = polymerizationEquipement.GetCountByElement().Select(kpv => kpv.Value).OrderBy(c => c);
-
-        return $"The quantity of the most common element minus the quantity of the least common element is {countByElementSorted.Last() - countByElementSorted.First()}.";
+        return $"The lowest total risk of any path is {cavern.SumOfRiskLevelMap?.Last() ?? -1}.";
     }
 }
 
-class PolymerizationEquipement {
-    public string PolymerTemplate { get; }
-    public Dictionary<string, ulong> PolymerAdjacentElements { get; private set; }
-    public List<InsertionRule> PairInsertionRules { get; private set; }
-    public int Step { get; private set; }
-    public PolymerizationEquipement(string polymerTemplate, List<InsertionRule> pairInsertionRules) {
-        PolymerTemplate = polymerTemplate;
-        PairInsertionRules = pairInsertionRules;
-        Step = 0;
-        // add the last element of the template to correctly count it
-        PolymerAdjacentElements = new Dictionary<string, ulong> { { PolymerTemplate.Last().ToString() , 1 } };
-        for (int i = 0; i < PolymerTemplate.Length - 1; i++) {
-            var adjacentElements = PolymerTemplate.Substring(i, 2);
-            PolymerAdjacentElements.Merge(adjacentElements, 1);
-        }
+class Cavern {
+    public List<byte> RiskLevelMap { get; private set; }
+    public List<int>? SumOfRiskLevelMap { get; private set; }
+
+    public int MapWidth { get; private set; }
+    public int MapHeight { get; private set; }
+
+    public Cavern(List<byte> riskLevelMap, int mapWidth, int mapHeight) {
+        RiskLevelMap = riskLevelMap;
+        MapWidth = mapWidth;
+        MapHeight = mapHeight;
+        Debug.Assert(MapHeight * MapWidth == RiskLevelMap.Count);
+        ComputePaths();
     }
-    public void ExecutePolymerInsertion() {
-        Step++;
-        var newPolymerAdjacentElements = new Dictionary<string, ulong> { { PolymerTemplate.Last().ToString(), 1 } };
-        foreach (var kpv in PolymerAdjacentElements) {
-            foreach (var rule in PairInsertionRules) {
-                if (rule.IsMatching(kpv.Key)) {
-                    rule.NewAdjacentElements.ForEach(newElems => newPolymerAdjacentElements.Merge(newElems, kpv.Value));
+
+    private void ComputePaths() {
+        SumOfRiskLevelMap = Enumerable.Repeat(-1, MapWidth * MapHeight).ToList();
+        SumOfRiskLevelMap[0] = 0;
+        var endingPosition = RiskLevelMap.Count - 1;
+        var positionToExplore = new PriorityQueue<int, int>(); // will dequeue lowest priority first (has the best odds to be the best path)
+        positionToExplore.Enqueue(0, 0);
+        while (positionToExplore.Count > 0) {
+            var currentPosition = positionToExplore.Dequeue();
+            if (currentPosition == endingPosition)
+                break;
+            var adjacentPositions = GetAdjacentPositions(currentPosition);
+            foreach (var adjacentPosition in adjacentPositions) {
+                var newPositionRisk = SumOfRiskLevelMap[currentPosition] + RiskLevelMap[adjacentPosition];
+                if (SumOfRiskLevelMap[adjacentPosition] > -1 && newPositionRisk > SumOfRiskLevelMap[adjacentPosition]) {
+                    // did we already reach that position with lower risk?
+                    continue;
                 }
+                SumOfRiskLevelMap[adjacentPosition] = newPositionRisk;
+                positionToExplore.Enqueue(adjacentPosition, newPositionRisk);
             }
         }
-        PolymerAdjacentElements = newPolymerAdjacentElements;
     }
-    public Dictionary<char, ulong> GetCountByElement() {
-        // count for the first element of adjacent elements or we would count twice
-        var groupedByElements = PolymerAdjacentElements
-            .Select(kpv => new { Element = kpv.Key.First(), Count = kpv.Value })
-            .GroupBy(c => c.Element);
-        var countByElement = new Dictionary<char, ulong>();
-        foreach (var group in groupedByElements) {
-            var total = (ulong) 0;
-            foreach (var elem in group) {
-                total += elem.Count;
+
+    /// <summary>
+    /// Return a list of all possible adjacent positions of <paramref name="currentPosition"/>
+    /// </summary>
+    /// <param name="currentPosition"></param>
+    /// <returns></returns>
+    private List<int> GetAdjacentPositions(int currentPosition) {
+        var adjacentDeltas = new int[] { -MapWidth, -1, 1, MapWidth };
+        var adjacentDeltasX = new int[] { 0, -1, +1, 0 };
+        var adjacentDeltasY = new int[] { -1, 0, 0, +1 };
+        var currentX = currentPosition % MapWidth;
+        var currentY = currentPosition / MapWidth;
+        var adjacentPositions = new List<int>();
+        for (int i = 0; i < adjacentDeltas.Length; i++) {
+            if (currentX + adjacentDeltasX[i] >= 0 && currentX + adjacentDeltasX[i] < MapWidth
+                && currentY + adjacentDeltasY[i] >= 0 && currentY + adjacentDeltasY[i] < MapHeight) {
+                adjacentPositions.Add(currentPosition + adjacentDeltas[i]);
             }
-            countByElement.Add(group.Key, total);
         }
-        return countByElement;
-    }
-}
-
-class InsertionRule {
-    public string AdjacentElements { get; private set; }
-    public string InsertedElement { get; private set; }
-    public List<string> NewAdjacentElements { get; private set; }
-
-    public InsertionRule(string adjacentElements, string insertedElement) {
-        AdjacentElements = adjacentElements;
-        InsertedElement = insertedElement;
-        NewAdjacentElements = new List<string>();
-        NewAdjacentElements.Add($"{AdjacentElements[0]}{InsertedElement}");
-        NewAdjacentElements.Add($"{InsertedElement}{AdjacentElements[1]}");
-    }
-    public bool IsMatching(string adjacentElements) => AdjacentElements.Equals(adjacentElements);
-}
-
-public static class Extensions {
-    public static void Merge(this Dictionary<string, ulong> dic, string key, ulong value) {
-        if (dic.ContainsKey(key)) {
-            dic[key] += value;
-        } else {
-            dic.Add(key, value);
-        }
+        return adjacentPositions;
     }
 }
