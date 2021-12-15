@@ -2,74 +2,83 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Text;
 
-Console.WriteLine(Puzzle.Solve("input-test"));
-Console.WriteLine(Puzzle.Solve("input"));
+Console.WriteLine(Puzzle.Solve("input-test", 1));
+Console.WriteLine(Puzzle.Solve("input", 1));
+Console.WriteLine(Puzzle.Solve("input-test", 5));
+Console.WriteLine(Puzzle.Solve("input", 5));
 
 static class Puzzle {
-    public static string Solve(string inputFilePath) {
+    public static string Solve(string inputFilePath, int scale) {
         var inputList = File.ReadAllLines(inputFilePath);
-        var cavern = new Cavern(inputList.SelectMany(c => c).Select(c => byte.Parse($"{c}")).ToList(), inputList[0].Length, inputList.Length);
-
-        return $"The lowest total risk of any path is {cavern.SumOfRiskLevelMap?.Last() ?? -1}.";
+        var cavern = new Cavern(inputList, inputList[0].Length, inputList.Length, scale);
+        return $"The lowest total risk of any path for scale {scale} is {cavern.SumOfRiskLevelMap[new Point(cavern.MapWidth - 1, cavern.MapHeight - 1)]}.";
     }
 }
 
 class Cavern {
-    public List<byte> RiskLevelMap { get; private set; }
-    public List<int>? SumOfRiskLevelMap { get; private set; }
+    public Dictionary<Point, int> RiskLevelMap { get; private set; }
+    public Dictionary<Point, int> SumOfRiskLevelMap { get; private set; }
 
     public int MapWidth { get; private set; }
     public int MapHeight { get; private set; }
 
-    public Cavern(List<byte> riskLevelMap, int mapWidth, int mapHeight) {
-        RiskLevelMap = riskLevelMap;
-        MapWidth = mapWidth;
-        MapHeight = mapHeight;
-        Debug.Assert(MapHeight * MapWidth == RiskLevelMap.Count);
-        ComputePaths();
-    }
-
-    private void ComputePaths() {
-        SumOfRiskLevelMap = Enumerable.Repeat(-1, MapWidth * MapHeight).ToList();
-        SumOfRiskLevelMap[0] = 0;
-        var endingPosition = RiskLevelMap.Count - 1;
-        var positionToExplore = new PriorityQueue<int, int>(); // will dequeue lowest priority first (has the best odds to be the best path)
-        positionToExplore.Enqueue(0, 0);
-        while (positionToExplore.Count > 0) {
-            var currentPosition = positionToExplore.Dequeue();
-            if (currentPosition == endingPosition)
-                break;
-            var adjacentPositions = GetAdjacentPositions(currentPosition);
-            foreach (var adjacentPosition in adjacentPositions) {
-                var newPositionRisk = SumOfRiskLevelMap[currentPosition] + RiskLevelMap[adjacentPosition];
-                if (SumOfRiskLevelMap[adjacentPosition] > -1 && newPositionRisk > SumOfRiskLevelMap[adjacentPosition]) {
-                    // did we already reach that position with lower risk?
-                    continue;
+    public Cavern(string[] riskLevelMap, int mapWidth, int mapHeight, int scale) {
+        RiskLevelMap = new Dictionary<Point, int>(
+            from y in Enumerable.Range(0, mapHeight)
+            from x in Enumerable.Range(0, mapWidth)
+            select new KeyValuePair<Point, int>(new Point(x, y), int.Parse($"{riskLevelMap[y][x]}"))
+        );
+        if (scale > 1) {
+            var newRiskLevelMap = new Dictionary<Point, int>();
+            foreach (var kpv in RiskLevelMap) {
+                for (int sv = 0; sv < scale; sv++) {
+                    for (int sh = 0; sh < scale; sh++) {
+                        var risk = kpv.Value + sh + sv;
+                        if (risk > 9)
+                            risk = risk - 9;
+                        newRiskLevelMap.Add(new Point(kpv.Key.X + sh * mapWidth, kpv.Key.Y + sv * mapHeight), risk);
+                    }
                 }
-                SumOfRiskLevelMap[adjacentPosition] = newPositionRisk;
-                positionToExplore.Enqueue(adjacentPosition, newPositionRisk);
             }
+            RiskLevelMap = newRiskLevelMap;
         }
+        MapWidth = mapWidth * scale;
+        MapHeight = mapHeight * scale;
+        Debug.Assert(MapHeight * MapWidth == RiskLevelMap.Count);
+        ComputeSumOfRiskLevelMap();
     }
 
-    /// <summary>
-    /// Return a list of all possible adjacent positions of <paramref name="currentPosition"/>
-    /// </summary>
-    /// <param name="currentPosition"></param>
-    /// <returns></returns>
-    private List<int> GetAdjacentPositions(int currentPosition) {
-        var adjacentDeltas = new int[] { -MapWidth, -1, 1, MapWidth };
-        var adjacentDeltasX = new int[] { 0, -1, +1, 0 };
-        var adjacentDeltasY = new int[] { -1, 0, 0, +1 };
-        var currentX = currentPosition % MapWidth;
-        var currentY = currentPosition / MapWidth;
-        var adjacentPositions = new List<int>();
-        for (int i = 0; i < adjacentDeltas.Length; i++) {
-            if (currentX + adjacentDeltasX[i] >= 0 && currentX + adjacentDeltasX[i] < MapWidth
-                && currentY + adjacentDeltasY[i] >= 0 && currentY + adjacentDeltasY[i] < MapHeight) {
-                adjacentPositions.Add(currentPosition + adjacentDeltas[i]);
+    private void ComputeSumOfRiskLevelMap() {
+        var endingPoint = new Point(MapWidth - 1, MapHeight - 1);
+        var pointsToExplore = new PriorityQueue<Point, int>(); // will dequeue lowest priority first (has the best odds to be the best path)
+
+        SumOfRiskLevelMap = new Dictionary<Point, int>();
+        SumOfRiskLevelMap[new Point(0, 0)] = 0;
+        pointsToExplore.Enqueue(new Point(0, 0), 0);
+
+        // Go until we find the bottom right corner
+        do {
+            var currentPoint = pointsToExplore.Dequeue();
+            if (currentPoint == endingPoint) {
+                break;
             }
-        }
-        return adjacentPositions;
+            foreach (var adjacentPoint in GetAdjacentPoints(currentPoint)) {
+                if (RiskLevelMap.ContainsKey(adjacentPoint)) {
+                    var totalRiskThroughP = SumOfRiskLevelMap[currentPoint] + RiskLevelMap[adjacentPoint];
+                    if (totalRiskThroughP < SumOfRiskLevelMap.GetValueOrDefault(adjacentPoint, int.MaxValue)) {
+                        SumOfRiskLevelMap[adjacentPoint] = totalRiskThroughP;
+                        pointsToExplore.Enqueue(adjacentPoint, totalRiskThroughP);
+                    }
+                }
+            }
+        } while (true);
     }
+
+    IEnumerable<Point> GetAdjacentPoints(Point point) =>
+        new[] {
+            new Point(point.X, point.Y+1),
+            new Point(point.X, point.Y-1),
+            new Point(point.X+1, point.Y),
+            new Point(point.X-1, point.Y)
+        };
 }
