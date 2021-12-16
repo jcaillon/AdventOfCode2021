@@ -2,83 +2,158 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Text;
 
-Console.WriteLine(Puzzle.Solve("input-test", 1));
-Console.WriteLine(Puzzle.Solve("input", 1));
-Console.WriteLine(Puzzle.Solve("input-test", 5));
-Console.WriteLine(Puzzle.Solve("input", 5));
+Console.WriteLine(Puzzle.Solve("input-test"));
+Console.WriteLine(Puzzle.Solve("input"));
 
 static class Puzzle {
-    public static string Solve(string inputFilePath, int scale) {
+    public static string Solve(string inputFilePath) {
         var inputList = File.ReadAllLines(inputFilePath);
-        var cavern = new Cavern(inputList, inputList[0].Length, inputList.Length, scale);
-        return $"The lowest total risk of any path for scale {scale} is {cavern.SumOfRiskLevelMap[new Point(cavern.MapWidth - 1, cavern.MapHeight - 1)]}.";
+        var sb = new StringBuilder();
+        foreach (var hexaRepresentation in inputList) {
+            var packetDecoder = new PacketDecoder(hexaRepresentation);
+            sb.AppendLine($"The packet has a version sum of {packetDecoder.GetSumOfPacketVersions()}");
+        }
+        return sb.ToString();
     }
 }
 
-class Cavern {
-    public Dictionary<Point, int> RiskLevelMap { get; private set; }
-    public Dictionary<Point, int> SumOfRiskLevelMap { get; private set; }
+class PacketDecoder {
+    public string BinaryRepresentation { get; private set; }
+    public List<Packet> Packets { get; private set; }
 
-    public int MapWidth { get; private set; }
-    public int MapHeight { get; private set; }
+    public PacketDecoder(string hexaRepresentation) {
+        BinaryRepresentation = string.Concat(hexaRepresentation.Select(c => Convert.ToString(Convert.ToInt32(c.ToString(), 16), 2).PadLeft(4, '0')));
+        Packets = (new Parser(BinaryRepresentation)).Packets;
+    }
 
-    public Cavern(string[] riskLevelMap, int mapWidth, int mapHeight, int scale) {
-        RiskLevelMap = new Dictionary<Point, int>(
-            from y in Enumerable.Range(0, mapHeight)
-            from x in Enumerable.Range(0, mapWidth)
-            select new KeyValuePair<Point, int>(new Point(x, y), int.Parse($"{riskLevelMap[y][x]}"))
-        );
-        if (scale > 1) {
-            var newRiskLevelMap = new Dictionary<Point, int>();
-            foreach (var kpv in RiskLevelMap) {
-                for (int sv = 0; sv < scale; sv++) {
-                    for (int sh = 0; sh < scale; sh++) {
-                        var risk = kpv.Value + sh + sv;
-                        if (risk > 9)
-                            risk = risk - 9;
-                        newRiskLevelMap.Add(new Point(kpv.Key.X + sh * mapWidth, kpv.Key.Y + sv * mapHeight), risk);
-                    }
-                }
+    public int GetSumOfPacketVersions() {
+        var sum = 0;
+        var q = new Queue<Packet>(Packets);
+        while (q.Count > 0) {
+            var packet = q.Dequeue();
+            if (packet is PacketOperator packetOperator) {
+                packetOperator.SubPackets.ForEach(p => q.Enqueue(p));
             }
-            RiskLevelMap = newRiskLevelMap;
+            sum += packet.Version;
         }
-        MapWidth = mapWidth * scale;
-        MapHeight = mapHeight * scale;
-        Debug.Assert(MapHeight * MapWidth == RiskLevelMap.Count);
-        ComputeSumOfRiskLevelMap();
+        return sum;
     }
 
-    private void ComputeSumOfRiskLevelMap() {
-        var endingPoint = new Point(MapWidth - 1, MapHeight - 1);
-        var pointsToExplore = new PriorityQueue<Point, int>(); // will dequeue lowest priority first (has the best odds to be the best path)
+    class Parser {
+        private string _data;
+        private int _dataLength;
+        private int _pos;
+        private int _packetStartingPos;
+        private Stack<PacketOperator> _lastOperatorPackets = new Stack<PacketOperator>();
+        public List<Packet> Packets { get; private set; }
 
-        SumOfRiskLevelMap = new Dictionary<Point, int>();
-        SumOfRiskLevelMap[new Point(0, 0)] = 0;
-        pointsToExplore.Enqueue(new Point(0, 0), 0);
+        public Parser(string input) {
+            _data = input;
+            _dataLength = _data.Length;
+            Packets = new List<Packet>();
+            ParseData();
+        }
 
-        // Go until we find the bottom right corner
-        do {
-            var currentPoint = pointsToExplore.Dequeue();
-            if (currentPoint == endingPoint) {
-                break;
-            }
-            foreach (var adjacentPoint in GetAdjacentPoints(currentPoint)) {
-                if (RiskLevelMap.ContainsKey(adjacentPoint)) {
-                    var totalRiskThroughP = SumOfRiskLevelMap[currentPoint] + RiskLevelMap[adjacentPoint];
-                    if (totalRiskThroughP < SumOfRiskLevelMap.GetValueOrDefault(adjacentPoint, int.MaxValue)) {
-                        SumOfRiskLevelMap[adjacentPoint] = totalRiskThroughP;
-                        pointsToExplore.Enqueue(adjacentPoint, totalRiskThroughP);
+        private void ParseData() {
+            Packet packet;
+            do {
+                packet = GetNextPacket();
+                var lastOperatorPacket = _lastOperatorPackets.Count > 0 ? _lastOperatorPackets.Peek() : null;
+                if (lastOperatorPacket != null && !lastOperatorPacket.IsCompleted()) {
+                    lastOperatorPacket.SubPackets.Add(packet);
+                    // unstack complete operators
+                    while (_lastOperatorPackets.Count > 0 && _lastOperatorPackets.Peek().IsCompleted()) {
+                        _lastOperatorPackets.Pop();
                     }
+                } else {
+                    Packets.Add(packet);
+                }
+                if (packet is PacketOperator packetOperator)
+                    _lastOperatorPackets.Push(packetOperator);
+            } while (!(packet is PacketEof));
+        }
+
+        private Packet GetNextPacket() {
+            if (_dataLength - _pos <= 6)
+                return new PacketEof();
+
+            _packetStartingPos = _pos;
+            var version = Convert.ToByte(getNextChars(3), 2);
+            var type = Convert.ToByte(getNextChars(3), 2);
+            switch (type) {
+                case 4:
+                    return NewPacketLiteralValue(version);
+                default:
+                    return NewPacketOperator(version);
+            }
+        }
+
+        private Packet NewPacketOperator(byte version) {
+            var isNbSubPackets = getNextChars(1)!.Equals("1");
+            var subPacketsLength = Convert.ToInt32(getNextChars(isNbSubPackets ? 11 : 15), 2);
+            return new PacketOperator(version, _pos - _packetStartingPos, isNbSubPackets, subPacketsLength);
+        }
+
+        private PacketLiteralValue NewPacketLiteralValue(byte version) {
+            var valueInBinary = new StringBuilder();
+            var originalPos = _pos;
+            while (true) {
+                var bitPrefix = getNextChars(1);
+                valueInBinary.Append(getNextChars(4));
+                if (bitPrefix![0] == '0') {
+                    break;
                 }
             }
-        } while (true);
+            //var nbPaddingZeroes = 4 - ((_pos - originalPos) % 4);
+            //Debug.Assert(nbPaddingZeroes == 4 || Convert.ToInt32(getNextChars(nbPaddingZeroes)) == 0);
+            return new PacketLiteralValue(version, _pos - _packetStartingPos, Convert.ToInt64(valueInBinary.ToString(), 2));
+        }
+
+        private string? getNextChars(int length) {
+            var correctedLength = Math.Min(length, _dataLength - _pos);
+            var s = correctedLength > 0 ? _data.Substring(_pos, correctedLength) : null;
+            _pos += correctedLength;
+            return s;
+        }
     }
 
-    IEnumerable<Point> GetAdjacentPoints(Point point) =>
-        new[] {
-            new Point(point.X, point.Y+1),
-            new Point(point.X, point.Y-1),
-            new Point(point.X+1, point.Y),
-            new Point(point.X-1, point.Y)
-        };
+    public class Packet {
+        public byte Version { get; private set; }
+        public int Length { get; private set; }
+        public Packet(byte version, int length) {
+            Version = version;
+            Length = length;
+        }
+    }
+    public class PacketEof : Packet {
+        public PacketEof() : base(0, 0) {}
+    }
+    public class PacketLiteralValue : Packet {
+        public long Value { get; private set; }
+        public PacketLiteralValue(byte version, int length, long value) : base(version, length) => Value = value;
+    }
+    public class PacketOperator : Packet {
+        public bool IsNumberOfPackets { get; private set; }
+        public int Value { get; private set; }
+        public int SubPacketsLength { get; private set; }
+        public List<Packet> SubPackets { get; private set; }
+        public PacketOperator(byte version, int length, bool isNbSubPackets, int subPacketsLength) : base(version, length) {
+            IsNumberOfPackets = isNbSubPackets;
+            SubPacketsLength = subPacketsLength;
+            SubPackets = new List<Packet>();
+        }
+        public bool IsCompleted() => IsNumberOfPackets ? SubPackets.Count == SubPacketsLength : GetSubPacketsTotalLength() == SubPacketsLength;
+        public int GetSubPacketsTotalLength() {
+            var total = 0;
+            var q = new Queue<Packet>(SubPackets);
+            while (q.Count > 0) {
+                var packet = q.Dequeue();
+                if (packet is PacketOperator packetOperator) {
+                    packetOperator.SubPackets.ForEach(p => q.Enqueue(p));
+                }
+                total += packet.Length;
+            }
+            return total;
+        }
+    }
 }
