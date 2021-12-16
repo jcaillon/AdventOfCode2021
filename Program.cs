@@ -11,7 +11,7 @@ static class Puzzle {
         var sb = new StringBuilder();
         foreach (var hexaRepresentation in inputList) {
             var packetDecoder = new PacketDecoder(hexaRepresentation);
-            sb.AppendLine($"The packet has a version sum of {packetDecoder.GetSumOfPacketVersions()}");
+            sb.AppendLine($"The expression evaluates to {packetDecoder.GetPacketValue()}");
         }
         return sb.ToString();
     }
@@ -37,6 +37,9 @@ class PacketDecoder {
             sum += packet.Version;
         }
         return sum;
+    }
+    public long GetPacketValue() {
+        return Packets[0].GetValue();
     }
 
     class Parser {
@@ -84,14 +87,14 @@ class PacketDecoder {
                 case 4:
                     return NewPacketLiteralValue(version);
                 default:
-                    return NewPacketOperator(version);
+                    return NewPacketOperator(version, type);
             }
         }
 
-        private Packet NewPacketOperator(byte version) {
+        private Packet NewPacketOperator(byte version, byte type) {
             var isNbSubPackets = getNextChars(1)!.Equals("1");
             var subPacketsLength = Convert.ToInt32(getNextChars(isNbSubPackets ? 11 : 15), 2);
-            return new PacketOperator(version, _pos - _packetStartingPos, isNbSubPackets, subPacketsLength);
+            return new PacketOperator(version, _pos - _packetStartingPos, isNbSubPackets, subPacketsLength, type);
         }
 
         private PacketLiteralValue NewPacketLiteralValue(byte version) {
@@ -124,6 +127,7 @@ class PacketDecoder {
             Version = version;
             Length = length;
         }
+        public long GetValue() => this is PacketOperator spo ? spo.GetResult() : this is PacketLiteralValue spv ? spv.Value : 0;
     }
     public class PacketEof : Packet {
         public PacketEof() : base(0, 0) {}
@@ -137,10 +141,12 @@ class PacketDecoder {
         public int Value { get; private set; }
         public int SubPacketsLength { get; private set; }
         public List<Packet> SubPackets { get; private set; }
-        public PacketOperator(byte version, int length, bool isNbSubPackets, int subPacketsLength) : base(version, length) {
+        private OperationTypeEnum OperationType { get; set; }
+        public PacketOperator(byte version, int length, bool isNbSubPackets, int subPacketsLength, byte operationType) : base(version, length) {
             IsNumberOfPackets = isNbSubPackets;
             SubPacketsLength = subPacketsLength;
             SubPackets = new List<Packet>();
+            OperationType = (OperationTypeEnum) operationType;
         }
         public bool IsCompleted() => IsNumberOfPackets ? SubPackets.Count == SubPacketsLength : GetSubPacketsTotalLength() == SubPacketsLength;
         public int GetSubPacketsTotalLength() {
@@ -154,6 +160,36 @@ class PacketDecoder {
                 total += packet.Length;
             }
             return total;
+        }
+        public long GetResult() {
+            switch (OperationType) {
+                case OperationTypeEnum.Sum:
+                    return SubPackets.Select(sp => sp.GetValue()).Sum();
+                case OperationTypeEnum.Product:
+                    long total = 1;
+                    SubPackets.Select(sp => sp.GetValue()).ToList().ForEach(v => total *= v);
+                    return total;
+                case OperationTypeEnum.Min:
+                    return SubPackets.Select(sp => sp.GetValue()).Min();
+                case OperationTypeEnum.Max:
+                    return SubPackets.Select(sp => sp.GetValue()).Max();
+                case OperationTypeEnum.GreaterThan:
+                    return SubPackets[0].GetValue() > SubPackets[1].GetValue() ? 1 : 0;
+                case OperationTypeEnum.LowerThan:
+                    return SubPackets[0].GetValue() < SubPackets[1].GetValue() ? 1 : 0;
+                case OperationTypeEnum.EqualsTo:
+                    return SubPackets[0].GetValue() == SubPackets[1].GetValue() ? 1 : 0;
+            }
+            throw new InvalidDataException();
+        }
+        public enum OperationTypeEnum : byte {
+            Sum = 0,
+            Product = 1,
+            Min = 2,
+            Max = 3,
+            GreaterThan = 5,
+            LowerThan = 6,
+            EqualsTo = 7
         }
     }
 }
