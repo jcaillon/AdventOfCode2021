@@ -15,11 +15,12 @@ dotnet run
 Each commit in this repo is a puzzle solution.
 
 <!-- 
-- [day17 ()](https://adventofcode.com/2021/day/16): [day17-part1](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs) 
+- [day18 ()](https://adventofcode.com/2021/day/18): [day18-part1](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs) 
 -->
-- [day16 (Packet decoder)](https://adventofcode.com/2021/day/16): [day16-part1](https://github.com/jcaillon/AdventOfCode2021/blob/d674b2dca6b531ec2a4c5ba10532bda4dbfcf12f/Program.cs) / [day16-part2](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs) 
+- [day17 (Ball curve with gravity)](https://adventofcode.com/2021/day/17): [day17-part1](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs) 
+- [day16 (Packet decoder)](https://adventofcode.com/2021/day/16): [day16-part1](https://github.com/jcaillon/AdventOfCode2021/blob/d674b2dca6b531ec2a4c5ba10532bda4dbfcf12f/Program.cs) / [day16-part2](https://github.com/jcaillon/AdventOfCode2021/blob/18501124a52b5db634443ec436d1f790f1372a13/Program.cs)
 - [day15 (Path finding Disjktra)](https://adventofcode.com/2021/day/15):  [day15-part1](https://github.com/jcaillon/AdventOfCode2021/blob/f51da24e689ced325e5d0b3a1af13aa885b8b7eb/Program.cs) / [day15-part2](https://github.com/jcaillon/AdventOfCode2021/blob/ab888af2aad835f2328e90b96b052a4dfe054d28/Program.cs)
-- [day14 (Extended Polymerization)](https://adventofcode.com/2021/day/14): [day14-part1](https://github.com/jcaillon/AdventOfCode2021/blob/d22d516433016a13144575953a060348fc3c5140/Program.cs) / [day14-part2](https://github.com/jcaillon/AdventOfCode2021/blob/main/Program.cs)
+- [day14 (Extended Polymerization)](https://adventofcode.com/2021/day/14): [day14-part1](https://github.com/jcaillon/AdventOfCode2021/blob/d22d516433016a13144575953a060348fc3c5140/Program.cs) / [day14-part2](https://github.com/jcaillon/AdventOfCode2021/blob/13da66560a6570133a5d50933ac4cec89e2a966e/Program.cs)
 - [day13 (Origami)](https://adventofcode.com/2021/day/13): [day13-part1](https://github.com/jcaillon/AdventOfCode2021/blob/0f3325b25da614f9145449e14bc06c3b6ca2295a/Program.cs) / [day13-part2](https://github.com/jcaillon/AdventOfCode2021/blob/b0e20ee82d6bdd4438da88fc28f73cbc6a858ccc/Program.cs)
 - [day12 (Find path)](https://adventofcode.com/2021/day/12): [day12-part1](https://github.com/jcaillon/AdventOfCode2021/blob/f20bf8d9ed9e33297dd0be3d61d6b1fdc45e8b1f/Program.cs) / [day12-part2](https://github.com/jcaillon/AdventOfCode2021/blob/8c94e43f731041a7c8934ea3ede31ed65cf0f8e8/Program.cs)
 - [day11 (Highlighted octopuses)](https://adventofcode.com/2021/day/11): [day11-part1](https://github.com/jcaillon/AdventOfCode2021/blob/62f4d21d447645fb537882067fafae8ea73a6994/Program.cs) / [day11-part2](https://github.com/jcaillon/AdventOfCode2021/blob/e8609b1e7e4c86435869d23d3e178144c0c4d3ee/Program.cs)

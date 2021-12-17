@@ -1,195 +1,64 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Text;
+using System.Text.RegularExpressions;
 
 Console.WriteLine(Puzzle.Solve("input-test"));
 Console.WriteLine(Puzzle.Solve("input"));
 
 static class Puzzle {
     public static string Solve(string inputFilePath) {
-        var inputList = File.ReadAllLines(inputFilePath);
-        var sb = new StringBuilder();
-        foreach (var hexaRepresentation in inputList) {
-            var packetDecoder = new PacketDecoder(hexaRepresentation);
-            sb.AppendLine($"The expression evaluates to {packetDecoder.GetPacketValue()}");
-        }
-        return sb.ToString();
+        var input = File.ReadAllText(inputFilePath);
+        var reg = new Regex(@"[-\d]+").Matches(input).Select(m => int.Parse(m.Value)).ToList();
+        var targetArea = new Rectangle(reg[0], reg[2], reg[1] - reg[0], reg[3] - reg[2]);
+
+        var oceanTrench = new OceanTrench();
+        oceanTrench.FindAllTrajectories(targetArea);
+
+        return $"The highest y position reached by a valid trajectory is {oceanTrench.Simulations.SelectMany(s => s.Trajectory).Select(p => p.Y).Max()}";
     }
 }
 
-class PacketDecoder {
-    public string BinaryRepresentation { get; private set; }
-    public List<Packet> Packets { get; private set; }
+class OceanTrench {
+    public List<Simulation> Simulations { get; private set; } = new List<Simulation>();
+    public void FindAllTrajectories(Rectangle targetArea) {
+        // initial x velocity must be non negative and < targetArea.Left because we can't overshoot target area after 1st step
+        // initial y velocity must be non negative (find highest curve) and velocity at y = 0 is equal to the opposite of the initial velocity
+        // so initial y velocity can't be more than targetArea.Top or next step after reaching y = 0 would overshoot
+        foreach (var initialVelocity in
+            from x in Enumerable.Range(1, targetArea.Left)
+            from y in Enumerable.Range(0, Math.Abs(targetArea.Top))
+            select new Point(x, y)) {
+            Simulations.Add(new Simulation(targetArea, new Point(0, 0), initialVelocity));
+        }
+        Simulations = Simulations.Where(s => s.TrajectoryInTargetArea).ToList();
+    }
+}
 
-    public PacketDecoder(string hexaRepresentation) {
-        BinaryRepresentation = string.Concat(hexaRepresentation.Select(c => Convert.ToString(Convert.ToInt32(c.ToString(), 16), 2).PadLeft(4, '0')));
-        Packets = (new Parser(BinaryRepresentation)).Packets;
+class Simulation {
+    public Rectangle TargetArea { get; private set; }
+    public List<Point> Trajectory { get; private set; }
+    public Point InitialPosition { get; private set; }
+    public Point InitialVelocity { get; private set; }
+    public bool TrajectoryInTargetArea { get; private set; }
+
+    public Simulation(Rectangle targetArea, Point initialPosition, Point initialVelocity) {
+        TargetArea = targetArea;
+        InitialPosition = initialPosition;
+        InitialVelocity = initialVelocity;
+        Trajectory = new List<Point>() { initialPosition };
+        Simulate();
     }
 
-    public int GetSumOfPacketVersions() {
-        var sum = 0;
-        var q = new Queue<Packet>(Packets);
-        while (q.Count > 0) {
-            var packet = q.Dequeue();
-            if (packet is PacketOperator packetOperator) {
-                packetOperator.SubPackets.ForEach(p => q.Enqueue(p));
-            }
-            sum += packet.Version;
-        }
-        return sum;
-    }
-    public long GetPacketValue() {
-        return Packets[0].GetValue();
-    }
-
-    class Parser {
-        private string _data;
-        private int _dataLength;
-        private int _pos;
-        private int _packetStartingPos;
-        private Stack<PacketOperator> _lastOperatorPackets = new Stack<PacketOperator>();
-        public List<Packet> Packets { get; private set; }
-
-        public Parser(string input) {
-            _data = input;
-            _dataLength = _data.Length;
-            Packets = new List<Packet>();
-            ParseData();
-        }
-
-        private void ParseData() {
-            Packet packet;
-            do {
-                packet = GetNextPacket();
-                var lastOperatorPacket = _lastOperatorPackets.Count > 0 ? _lastOperatorPackets.Peek() : null;
-                if (lastOperatorPacket != null && !lastOperatorPacket.IsCompleted()) {
-                    lastOperatorPacket.SubPackets.Add(packet);
-                    // unstack complete operators
-                    while (_lastOperatorPackets.Count > 0 && _lastOperatorPackets.Peek().IsCompleted()) {
-                        _lastOperatorPackets.Pop();
-                    }
-                } else {
-                    Packets.Add(packet);
-                }
-                if (packet is PacketOperator packetOperator)
-                    _lastOperatorPackets.Push(packetOperator);
-            } while (!(packet is PacketEof));
-        }
-
-        private Packet GetNextPacket() {
-            if (_dataLength - _pos <= 6)
-                return new PacketEof();
-
-            _packetStartingPos = _pos;
-            var version = Convert.ToByte(getNextChars(3), 2);
-            var type = Convert.ToByte(getNextChars(3), 2);
-            switch (type) {
-                case 4:
-                    return NewPacketLiteralValue(version);
-                default:
-                    return NewPacketOperator(version, type);
-            }
-        }
-
-        private Packet NewPacketOperator(byte version, byte type) {
-            var isNbSubPackets = getNextChars(1)!.Equals("1");
-            var subPacketsLength = Convert.ToInt32(getNextChars(isNbSubPackets ? 11 : 15), 2);
-            return new PacketOperator(version, _pos - _packetStartingPos, isNbSubPackets, subPacketsLength, type);
-        }
-
-        private PacketLiteralValue NewPacketLiteralValue(byte version) {
-            var valueInBinary = new StringBuilder();
-            var originalPos = _pos;
-            while (true) {
-                var bitPrefix = getNextChars(1);
-                valueInBinary.Append(getNextChars(4));
-                if (bitPrefix![0] == '0') {
-                    break;
-                }
-            }
-            //var nbPaddingZeroes = 4 - ((_pos - originalPos) % 4);
-            //Debug.Assert(nbPaddingZeroes == 4 || Convert.ToInt32(getNextChars(nbPaddingZeroes)) == 0);
-            return new PacketLiteralValue(version, _pos - _packetStartingPos, Convert.ToInt64(valueInBinary.ToString(), 2));
-        }
-
-        private string? getNextChars(int length) {
-            var correctedLength = Math.Min(length, _dataLength - _pos);
-            var s = correctedLength > 0 ? _data.Substring(_pos, correctedLength) : null;
-            _pos += correctedLength;
-            return s;
+    private void Simulate() {
+        var currentPoint = InitialPosition;
+        var currentVelocity = InitialVelocity;
+        while(!TrajectoryInTargetArea && currentPoint.X <= TargetArea.Right && currentPoint.Y >= TargetArea.Bottom) {
+            currentPoint.Offset(currentVelocity.X, currentVelocity.Y);
+            currentVelocity.Offset(currentVelocity.X > 0 ? -1 : 0, -1);
+            TrajectoryInTargetArea = TargetArea.Contains(currentPoint);
+            Trajectory.Add(currentPoint);
         }
     }
 
-    public class Packet {
-        public byte Version { get; private set; }
-        public int Length { get; private set; }
-        public Packet(byte version, int length) {
-            Version = version;
-            Length = length;
-        }
-        public long GetValue() => this is PacketOperator spo ? spo.GetResult() : this is PacketLiteralValue spv ? spv.Value : 0;
-    }
-    public class PacketEof : Packet {
-        public PacketEof() : base(0, 0) {}
-    }
-    public class PacketLiteralValue : Packet {
-        public long Value { get; private set; }
-        public PacketLiteralValue(byte version, int length, long value) : base(version, length) => Value = value;
-    }
-    public class PacketOperator : Packet {
-        public bool IsNumberOfPackets { get; private set; }
-        public int Value { get; private set; }
-        public int SubPacketsLength { get; private set; }
-        public List<Packet> SubPackets { get; private set; }
-        private OperationTypeEnum OperationType { get; set; }
-        public PacketOperator(byte version, int length, bool isNbSubPackets, int subPacketsLength, byte operationType) : base(version, length) {
-            IsNumberOfPackets = isNbSubPackets;
-            SubPacketsLength = subPacketsLength;
-            SubPackets = new List<Packet>();
-            OperationType = (OperationTypeEnum) operationType;
-        }
-        public bool IsCompleted() => IsNumberOfPackets ? SubPackets.Count == SubPacketsLength : GetSubPacketsTotalLength() == SubPacketsLength;
-        public int GetSubPacketsTotalLength() {
-            var total = 0;
-            var q = new Queue<Packet>(SubPackets);
-            while (q.Count > 0) {
-                var packet = q.Dequeue();
-                if (packet is PacketOperator packetOperator) {
-                    packetOperator.SubPackets.ForEach(p => q.Enqueue(p));
-                }
-                total += packet.Length;
-            }
-            return total;
-        }
-        public long GetResult() {
-            switch (OperationType) {
-                case OperationTypeEnum.Sum:
-                    return SubPackets.Select(sp => sp.GetValue()).Sum();
-                case OperationTypeEnum.Product:
-                    long total = 1;
-                    SubPackets.Select(sp => sp.GetValue()).ToList().ForEach(v => total *= v);
-                    return total;
-                case OperationTypeEnum.Min:
-                    return SubPackets.Select(sp => sp.GetValue()).Min();
-                case OperationTypeEnum.Max:
-                    return SubPackets.Select(sp => sp.GetValue()).Max();
-                case OperationTypeEnum.GreaterThan:
-                    return SubPackets[0].GetValue() > SubPackets[1].GetValue() ? 1 : 0;
-                case OperationTypeEnum.LowerThan:
-                    return SubPackets[0].GetValue() < SubPackets[1].GetValue() ? 1 : 0;
-                case OperationTypeEnum.EqualsTo:
-                    return SubPackets[0].GetValue() == SubPackets[1].GetValue() ? 1 : 0;
-            }
-            throw new InvalidDataException();
-        }
-        public enum OperationTypeEnum : byte {
-            Sum = 0,
-            Product = 1,
-            Min = 2,
-            Max = 3,
-            GreaterThan = 5,
-            LowerThan = 6,
-            EqualsTo = 7
-        }
-    }
 }
