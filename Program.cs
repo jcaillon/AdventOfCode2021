@@ -3,18 +3,19 @@ using System.Drawing;
 using System.Text;
 using System.Text.RegularExpressions;
 
-Console.WriteLine(Puzzle.Solve("input-test"));
-Console.WriteLine(Puzzle.Solve("input"));
+Console.WriteLine(Puzzle.Solve("input", 50));
+Console.WriteLine(Puzzle.Solve("input-test", long.MaxValue));
+Console.WriteLine(Puzzle.Solve("input", long.MaxValue));
 
 static class Puzzle {
-    public static string Solve(string inputFilePath) {
+    public static string Solve(string inputFilePath, long consideredAbsRange) {
         var rebootSteps = new List<Step>();
         foreach (var line in File.ReadAllLines(inputFilePath)) {
             var reg = new Regex(@"[-\d]+").Matches(line).Select(m => int.Parse(m.Value)).ToArray();
             rebootSteps.Add(new Step(line.StartsWith("on"), new Cuboid(new Range(reg[0], reg[1]), new Range(reg[2], reg[3]), new Range(reg[4], reg[5]))));
         }
 
-        var reactor = new Reactor(rebootSteps.ToArray(), new Cuboid(new Range(-50, 50), new Range(-50,50), new Range(-50, 50)));
+        var reactor = new Reactor(rebootSteps.ToArray(), new Cuboid(new Range(-consideredAbsRange, consideredAbsRange), new Range(-consideredAbsRange, consideredAbsRange), new Range(-consideredAbsRange, consideredAbsRange)));
         reactor.Reboot();
 
         return $"There are a total of {reactor.TotalNumberOfCubesTurnedOn} cubes turned on after the reboot";
