@@ -8,57 +8,56 @@ Console.WriteLine(Puzzle.Solve("input"));
 
 static class Puzzle {
     public static string Solve(string inputFilePath) {
-        var input = File.ReadAllText(inputFilePath);
-        var reg = new Regex(@"[-\d]+").Matches(input).Select(m => int.Parse(m.Value)).ToList();
-        var targetArea = new Rectangle(reg[0], reg[2], reg[1] - reg[0], reg[3] - reg[2]);
-
-        var oceanTrench = new OceanTrench();
-        oceanTrench.FindAllSimulationsLandingTo(targetArea);
-
-        return $"There are a total of {oceanTrench.Simulations.Count()} initial velocity that satisfy the simulation goal";
-    }
-}
-
-class OceanTrench {
-    public List<Simulation> Simulations { get; private set; } = new List<Simulation>();
-    public void FindAllSimulationsLandingTo(Rectangle targetArea) {
-        var xVelMin = 1; // must be >0 to go somewhere
-        var xVelMax = targetArea.Right; // can't be more because we would overshoot target area after 1st step
-        var yVelMin = -Math.Abs(targetArea.Top); // can't be less because we would overshoot target area after 1st step
-        var yVelMax = Math.Abs(targetArea.Top); // at y = 0 velocity is equal to the opposite of the initial velocity so initial velocity can't be more than that or next step after reaching y = 0 would overshoot
-        for (int xVel = xVelMin; xVel <= xVelMax; xVel++) {
-            for (int yVel = yVelMin; yVel <= yVelMax; yVel++) {
-                Simulations.Add(new Simulation(targetArea, new Point(0, 0), new Point(xVel, yVel)));
-            }
+        var rebootSteps = new List<Step>();
+        foreach (var line in File.ReadAllLines(inputFilePath)) {
+            var reg = new Regex(@"[-\d]+").Matches(line).Select(m => int.Parse(m.Value)).ToArray();
+            rebootSteps.Add(new Step(line.StartsWith("on"), new Cuboid(new Range(reg[0], reg[1]), new Range(reg[2], reg[3]), new Range(reg[4], reg[5]))));
         }
-        Simulations = Simulations.Where(s => s.TrajectoryInTargetArea).ToList();
+
+        var reactor = new Reactor(rebootSteps.ToArray(), new Cuboid(new Range(-50, 50), new Range(-50,50), new Range(-50, 50)));
+        reactor.Reboot();
+
+        return $"There are a total of {reactor.TotalNumberOfCubesTurnedOn} cubes turned on after the reboot";
     }
 }
 
-class Simulation {
-    public Rectangle TargetArea { get; private set; }
-    public List<Point> Trajectory { get; private set; }
-    public Point InitialPosition { get; private set; }
-    public Point InitialVelocity { get; private set; }
-    public bool TrajectoryInTargetArea { get; private set; }
+public record Reactor(Step[] RebootSteps, Cuboid ReactorGrid) {
+    public long TotalNumberOfCubesTurnedOn { get; private set; }
 
-    public Simulation(Rectangle targetArea, Point initialPosition, Point initialVelocity) {
-        TargetArea = targetArea;
-        InitialPosition = initialPosition;
-        InitialVelocity = initialVelocity;
-        Trajectory = new List<Point>() { initialPosition };
-        Simulate();
+    public void Reboot() {
+        TotalNumberOfCubesTurnedOn = ComputeNumberbOfCubesTurnedOnAfterStep(RebootSteps.Length - 1, ReactorGrid);
     }
 
-    private void Simulate() {
-        var currentPoint = InitialPosition;
-        var currentVelocity = InitialVelocity;
-        while(!TrajectoryInTargetArea && currentPoint.X <= TargetArea.Right && currentPoint.Y >= TargetArea.Top) {
-            currentPoint.Offset(currentVelocity.X, currentVelocity.Y);
-            currentVelocity.Offset(currentVelocity.X > 0 ? -1 : 0, -1);
-            TrajectoryInTargetArea = currentPoint.X >= TargetArea.Left && currentPoint.X <= TargetArea.Right && currentPoint.Y >= TargetArea.Top && currentPoint.Y <= TargetArea.Bottom;
-            Trajectory.Add(currentPoint);
+    /// <summary>
+    /// Return how many cubes are turned on inside the cuboid <paramref name="cubToConsider"/> after applying reboot step number <paramref name="step"/>
+    /// </summary>
+    public long ComputeNumberbOfCubesTurnedOnAfterStep(int step, Cuboid cubToConsider) {
+        if (cubToConsider.GetVolume() == 0) {
+            return 0;
         }
-    }
 
+        var rebootStep = RebootSteps[step];
+        var currentCuboid = cubToConsider.GetIntersection(rebootStep.Cuboid);
+
+        long nbOfCubesTurnedOnOutsideCurrentCuboid = 0;
+        if (step > 0) {
+            var nbCubesTurnedOnAtPreviousStep = ComputeNumberbOfCubesTurnedOnAfterStep(step - 1, cubToConsider);
+            var nbCubesTurnedOnAtPreviousStepInsideCurrentCuboid = ComputeNumberbOfCubesTurnedOnAfterStep(step - 1, currentCuboid);
+            nbOfCubesTurnedOnOutsideCurrentCuboid = nbCubesTurnedOnAtPreviousStep - nbCubesTurnedOnAtPreviousStepInsideCurrentCuboid;
+        }
+        return nbOfCubesTurnedOnOutsideCurrentCuboid + (rebootStep.TurnOn ? currentCuboid.GetVolume() : 0);
+    }
 }
+
+public record Step(bool TurnOn, Cuboid Cuboid);
+
+public record Cuboid(Range xRange, Range yRange, Range zRange) {
+    public Cuboid GetIntersection(Cuboid anotherCuboid) =>
+        new Cuboid(xRange.GetIntersection(anotherCuboid.xRange), yRange.GetIntersection(anotherCuboid.yRange), zRange.GetIntersection(anotherCuboid.zRange));
+    public long GetVolume() => xRange.GetLength() * yRange.GetLength() * zRange.GetLength();
+}
+public record Range(long From, long To) {
+    public Range GetIntersection(Range anotherRange) => new Range(Math.Max(anotherRange.From, From), Math.Min(anotherRange.To, To));
+    public long GetLength() => From > To ? 0 : To - From + 1;
+}
+
