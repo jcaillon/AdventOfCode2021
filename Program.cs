@@ -3,62 +3,158 @@ using System.Drawing;
 using System.Text;
 using System.Text.RegularExpressions;
 
-Console.WriteLine(Puzzle.Solve("input", 50));
-Console.WriteLine(Puzzle.Solve("input-test", long.MaxValue));
-Console.WriteLine(Puzzle.Solve("input", long.MaxValue));
+Console.WriteLine(Puzzle.Solve("input-test"));
+Console.WriteLine(Puzzle.Solve("input"));
 
 static class Puzzle {
-    public static string Solve(string inputFilePath, long consideredAbsRange) {
-        var rebootSteps = new List<Step>();
+    public static string Solve(string inputFilePath) {
+        var snailfishes = new List<Snailfish>();
         foreach (var line in File.ReadAllLines(inputFilePath)) {
-            var reg = new Regex(@"[-\d]+").Matches(line).Select(m => int.Parse(m.Value)).ToArray();
-            rebootSteps.Add(new Step(line.StartsWith("on"), new Cuboid(new Range(reg[0], reg[1]), new Range(reg[2], reg[3]), new Range(reg[4], reg[5]))));
+            snailfishes.Add(new Snailfish(line));
+        }
+        Snailfish finalSum = snailfishes[0].Reduce();
+        for (int i = 1; i < snailfishes.Count; i++) {
+            finalSum = finalSum.Add(snailfishes[i].Reduce()).Reduce();
         }
 
-        var reactor = new Reactor(rebootSteps.ToArray(), new Cuboid(new Range(-consideredAbsRange, consideredAbsRange), new Range(-consideredAbsRange, consideredAbsRange), new Range(-consideredAbsRange, consideredAbsRange)));
-        reactor.Reboot();
-
-        return $"There are a total of {reactor.TotalNumberOfCubesTurnedOn} cubes turned on after the reboot";
+        return $"The magnitude of the final sum is {finalSum.GetMagnitude()} for {finalSum}";
     }
 }
 
-public record Reactor(Step[] RebootSteps, Cuboid ReactorGrid) {
-    public long TotalNumberOfCubesTurnedOn { get; private set; }
-
-    public void Reboot() {
-        TotalNumberOfCubesTurnedOn = ComputeNumberbOfCubesTurnedOnAfterStep(RebootSteps.Length - 1, ReactorGrid);
-    }
-
-    /// <summary>
-    /// Return how many cubes are turned on inside the cuboid <paramref name="cubToConsider"/> after applying reboot step number <paramref name="step"/>
-    /// </summary>
-    public long ComputeNumberbOfCubesTurnedOnAfterStep(int step, Cuboid cubToConsider) {
-        if (cubToConsider.GetVolume() == 0) {
-            return 0;
+public class Element { }
+public class Pair : Element {
+    public Element[] Elements { get; set; }
+    public Pair? Parent { get; set; }
+    public Pair(Pair? parent, string toParse) {
+        Parent = parent;
+        Elements = new Element[2];
+        var strIndex = 1;
+        if (!char.IsDigit(toParse[strIndex])) {
+            var stackCount = 1;
+            do {
+                strIndex++;
+                var curChar = toParse[strIndex];
+                if (curChar == '[')
+                    stackCount++;
+                else if (curChar == ']')
+                    stackCount--;
+            } while (stackCount > 0);
         }
-
-        var rebootStep = RebootSteps[step];
-        var currentCuboid = cubToConsider.GetIntersection(rebootStep.Cuboid);
-
-        long nbOfCubesTurnedOnOutsideCurrentCuboid = 0;
-        if (step > 0) {
-            var nbCubesTurnedOnAtPreviousStep = ComputeNumberbOfCubesTurnedOnAfterStep(step - 1, cubToConsider);
-            var nbCubesTurnedOnAtPreviousStepInsideCurrentCuboid = ComputeNumberbOfCubesTurnedOnAfterStep(step - 1, currentCuboid);
-            nbOfCubesTurnedOnOutsideCurrentCuboid = nbCubesTurnedOnAtPreviousStep - nbCubesTurnedOnAtPreviousStepInsideCurrentCuboid;
-        }
-        return nbOfCubesTurnedOnOutsideCurrentCuboid + (rebootStep.TurnOn ? currentCuboid.GetVolume() : 0);
+        Elements[0] = ParseElement(toParse.Substring(1, strIndex));
+        Elements[1] = ParseElement(toParse.Substring(strIndex + 2, toParse.Length - strIndex - 3)); // [1,1]
     }
+    public Pair(Pair? parent, Element[] elements) {
+        Elements = elements;
+        Parent = parent;
+    }
+    private Element ParseElement(string toParse) {
+        if (char.IsDigit(toParse[0])) {
+            return AddNewNumberAfter(byte.Parse(toParse), null);
+        }
+        return new Pair(this, toParse);
+    }
+    protected bool Split() {
+        for (int i = 0; i < Elements.Length; i++) {
+            if (Elements[i] is Number number) {
+                if (number.CanSplit()) {
+                    var split = number.Split();
+                    var firstNumber = AddNewNumberAfter(split[0], number);
+                    Elements[i] = new Pair(this, new Element[] { firstNumber, AddNewNumberAfter(split[1], firstNumber) });
+                    RemoveNumber(number);
+                    return true;
+                }
+            } else if (Elements[i] is Pair pair) {
+                if (pair.Split())
+                    return true;
+            }
+        }
+        return false;
+    }
+    protected bool Explode() {
+        for (int i = 0; i < Elements.Length; i++) {
+            if (Elements[i] is Pair pair) {
+                var nesting = pair.GetNesting();
+                if (nesting >= 4 && pair.Elements[0] is Number left && pair.Elements[1] is Number right) {
+                    var leftVal = left.Value;
+                    var rightVal = right.Value;
+                    var previousNumber = FindAdjacentNumberOf(left, false);
+                    if (previousNumber != null)
+                        previousNumber.Value += leftVal; // add left value to right most parent number (if any)
+                    var nextNumber = FindAdjacentNumberOf(right, true);
+                    if (nextNumber != null)
+                        nextNumber.Value += rightVal; // add right value to leftmost parent number (if any)
+                    Elements[i] = AddNewNumberAfter(0, right);
+                    RemoveNumber(left);
+                    RemoveNumber(right);
+                    return true;
+                } else {
+                    if (pair.Explode())
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+    private Number AddNewNumberAfter(byte value, Number? previousValue) {
+        var newNumber = new Number(value);
+        var snailFish = GetSnaifFish();
+        if (previousValue == null) {
+            snailFish!.Numbers.AddLast(newNumber);
+        } else {
+            snailFish!.Numbers.AddAfter(snailFish.Numbers.Find(previousValue)!, newNumber);
+        }
+        return newNumber;
+    }
+    private void RemoveNumber(Number val) {
+        GetSnaifFish()!.Numbers.Remove(val);
+    }
+    private Number? FindAdjacentNumberOf(Number val, bool seekNext) {
+        var snailFish = GetSnaifFish();
+        var current = snailFish!.Numbers.Find(val);
+        return seekNext ? current!.Next?.Value : current!.Previous?.Value;
+    }
+    private Snailfish? _snailFish;
+    private Snailfish? GetSnaifFish() {
+        if (_snailFish == null) {
+            var snailFish = this;
+            while (snailFish != null && !(snailFish is Snailfish)) {
+                snailFish = snailFish.Parent;
+            }
+            _snailFish = snailFish as Snailfish;
+        }
+        return _snailFish;
+    }
+    public long GetMagnitude() {
+        return 3 * (Elements[0] is Number left ? left.Value : ((Pair) Elements[0]).GetMagnitude()) +
+            2 * (Elements[1] is Number right ? right.Value : ((Pair) Elements[1]).GetMagnitude());
+    }
+    public int GetNesting() => Parent == null ? 0 : Parent.GetNesting() + 1;
+    public override string? ToString() => $"[{Elements[0]},{Elements[1]}]";
 }
-
-public record Step(bool TurnOn, Cuboid Cuboid);
-
-public record Cuboid(Range xRange, Range yRange, Range zRange) {
-    public Cuboid GetIntersection(Cuboid anotherCuboid) =>
-        new Cuboid(xRange.GetIntersection(anotherCuboid.xRange), yRange.GetIntersection(anotherCuboid.yRange), zRange.GetIntersection(anotherCuboid.zRange));
-    public long GetVolume() => xRange.GetLength() * yRange.GetLength() * zRange.GetLength();
+public class Number : Element {
+    public byte Value { get; set; }
+    public Number(byte value) => Value = value;
+    public bool CanSplit() => Value >= 10;
+    public byte[] Split() {
+        var left = (byte) Math.Floor((decimal) Value / 2);
+        return new byte[] { left, (byte) (Value - left) };
+    }
+    public override string? ToString() => $"{Value}";
 }
-public record Range(long From, long To) {
-    public Range GetIntersection(Range anotherRange) => new Range(Math.Max(anotherRange.From, From), Math.Min(anotherRange.To, To));
-    public long GetLength() => From > To ? 0 : To - From + 1;
+public class Snailfish : Pair {
+    public LinkedList<Number> Numbers { get; set; } = new LinkedList<Number>();
+    public Snailfish(string toParse) : base(null, toParse) { }
+    public Snailfish(Element[] elements) : base(null, elements) { }
+    public Snailfish Reduce() {
+        //Console.WriteLine($"Before: {this}");
+        while (true) {
+            if (!Explode() && !Split()) {
+                break;
+            }
+            //Console.WriteLine($"        {this}");
+        }
+        return this;
+    }
+    public Snailfish Add(Snailfish snailfish) => new Snailfish($"[{this},{snailfish}]");
 }
 
