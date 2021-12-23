@@ -12,12 +12,23 @@ static class Puzzle {
         foreach (var line in File.ReadAllLines(inputFilePath)) {
             snailfishes.Add(new Snailfish(line));
         }
-        Snailfish finalSum = snailfishes[0].Reduce();
-        for (int i = 1; i < snailfishes.Count; i++) {
-            finalSum = finalSum.Add(snailfishes[i].Reduce()).Reduce();
+
+        var maxMagnitude = 0L;
+        Snailfish? finalSum = null;
+        for (int i = 0; i < snailfishes.Count; i++) {
+            for (int j = 0; j < snailfishes.Count; j++) {
+                if (i != j) {
+                    var s = snailfishes[i].Reduce().Add(snailfishes[j].Reduce()).Reduce();
+                    var m = s.GetMagnitude();
+                    if (m > maxMagnitude) {
+                        maxMagnitude = m;
+                        finalSum = s;
+                    }
+                }
+            }
         }
 
-        return $"The magnitude of the final sum is {finalSum.GetMagnitude()} for {finalSum}";
+        return $"The max magnitude of 2 different snailfishes is {maxMagnitude} for {finalSum}";
     }
 }
 
@@ -144,7 +155,6 @@ public class Number : Element {
 public class Snailfish : Pair {
     public LinkedList<Number> Numbers { get; set; } = new LinkedList<Number>();
     public Snailfish(string toParse) : base(null, toParse) { }
-    public Snailfish(Element[] elements) : base(null, elements) { }
     public Snailfish Reduce() {
         //Console.WriteLine($"Before: {this}");
         while (true) {
